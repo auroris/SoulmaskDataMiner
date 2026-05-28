@@ -26,6 +26,12 @@ namespace SoulmaskDataMiner.IO
 	/// </summary>
 	internal static class TextureExporter
 	{
+		// SkiaSharp's decode/encode path is not safe under concurrent use from multiple miners.
+		// Running two encodes at once produces "Fatal error. Internal CLR error. (0x80131506)"
+		// originating from native code, which kills the process. Serialize the SkiaSharp portion.
+		private static readonly object sSkiaLock = new();
+
+
 		/// <summary>
 		/// Export the first texture found within an asset's exports
 		/// </summary>
@@ -70,35 +76,43 @@ namespace SoulmaskDataMiner.IO
 				return false;
 			}
 
-			SKBitmap? bitmap = texture.Decode()?.ToSkBitmap();
-			if (bitmap == null)
+			lock (sSkiaLock)
 			{
-				logger.Warning($"{texture.GetPathName()} - Failed to decode texture.");
-				return false;
-			}
-
-			if (!texture.SRGB)
-			{
-				unsafe
+				using SKBitmap? bitmap = texture.Decode()?.ToSkBitmap();
+				if (bitmap == null)
 				{
-					SKColor* ptr = (SKColor*)bitmap.GetPixels().ToPointer();
-					int count = bitmap.Width * bitmap.Height;
-					for (int i = 0; i < count; ++i)
+					logger.Warning($"{texture.GetPathName()} - Failed to decode texture.");
+					return false;
+				}
+
+				if (!texture.SRGB)
+				{
+					if (bitmap.BytesPerPixel != 4)
 					{
-						ptr[i] = LinearToSrgb(ptr[i]);
+						logger.Warning($"{texture.GetPathName()} - Skipping linear-to-sRGB conversion: unsupported pixel format {bitmap.ColorType} ({bitmap.BytesPerPixel} bpp).");
+					}
+					else
+					{
+						unsafe
+						{
+							SKColor* ptr = (SKColor*)bitmap.GetPixels().ToPointer();
+							int count = bitmap.Width * bitmap.Height;
+							for (int i = 0; i < count; ++i)
+							{
+								ptr[i] = LinearToSrgb(ptr[i]);
+							}
+						}
+						bitmap.NotifyPixelsChanged();
 					}
 				}
-				bitmap.NotifyPixelsChanged();
-			}
 
-			SKData data = bitmap.Encode(SKEncodedImageFormat.Png, 100);
-			if (data == null)
-			{
-				return false;
-			}
+				using SKData data = bitmap.Encode(SKEncodedImageFormat.Png, 100);
+				if (data == null)
+				{
+					return false;
+				}
 
-			using (FileStream file = IOUtil.CreateFile(outPath, logger))
-			{
+				using FileStream file = IOUtil.CreateFile(outPath, logger);
 				data.SaveTo(file);
 			}
 

@@ -44,4 +44,8 @@ Clone the repository, including submodules.
 git clone --recursive https://github.com/CrystalFerrai/SoulmaskDataMiner.git
 ```
 
-You can then open and build SoulmaskDataMiner.sln.
+You can then open and build SoulmaskDataMiner.sln:
+
+```
+dotnet build SoulmaskDataMiner.sln -c Release
+```

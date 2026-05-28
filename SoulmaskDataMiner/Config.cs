@@ -133,6 +133,8 @@ namespace SoulmaskDataMiner
 								List<string> unknownMiners = new();
 								foreach (string miner in miners)
 								{
+									if (miner.Equals("all", StringComparison.OrdinalIgnoreCase)) continue;
+
 									if (!defaultMiners.Contains(miner, StringComparer.OrdinalIgnoreCase) &&
 										!additionalMiners.Contains(miner, StringComparer.OrdinalIgnoreCase))
 									{
