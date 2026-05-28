@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Crystal Ferrai
+// Copyright 2026 Crystal Ferrai
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -126,7 +126,7 @@ namespace SoulmaskDataMiner.IO
 		/// </summary>
 		/// <param name="data">The row data</param>
 		/// <remarks>
-		/// The row should be preformatted valid SQL consisting of a comma-delimeted
+		/// The row should be preformatted valid SQL consisting of a comma-delimited
 		/// series of values that will be inserted into the table, and nothing else.
 		/// </remarks>
 		public void WriteRow(string data)

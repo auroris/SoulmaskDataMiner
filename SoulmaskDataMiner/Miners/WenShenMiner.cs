@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Crystal Ferrai
+// Copyright 2026 Crystal Ferrai
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -296,7 +296,7 @@ namespace SoulmaskDataMiner.Miners
 
 			public override bool Equals([NotNullWhen(true)] object? obj)
 			{
-				return obj is WenShenKey otehr && Equals(otehr);
+				return obj is WenShenKey other && Equals(other);
 			}
 
 			public bool Equals(WenShenKey other)
@@ -332,7 +332,7 @@ namespace SoulmaskDataMiner.Miners
 			{
 				if (list.Count == 0)
 				{
-					throw new ArgumentException("CombinedwenShenData.Build called with empty list", nameof(list));
+					throw new ArgumentException("CombinedWenShenData.Build called with empty list", nameof(list));
 				}
 
 				CombinedWenShenData result = new()

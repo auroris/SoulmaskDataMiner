@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Crystal Ferrai
+// Copyright 2026 Crystal Ferrai
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -190,7 +190,7 @@ namespace SoulmaskDataMiner.Miners
 				writer.WriteLine("name,class,desc,icon,stack,weight,cat,cat_name,cat_icon");
 				foreach (ItemData item in items)
 				{
-					writer.WriteLine($"{CsvStr(item.Info.Name)},{CsvStr(item.Info.FullPath)},{CsvStr(item.Info.Description)},{item.Info.Icon?.Name},{item.StackSize},{item.Weight},{item.CategoryID},{CsvStr(item.CategoryName)},{item.CategoryIcon}");
+					writer.WriteLine($"{CsvStr(item.Info.Name)},{CsvStr(item.Info.FullPath)},{CsvStr(item.Info.Description)},{item.Info.Icon?.Name},{item.StackSize},{item.Weight},{item.CategoryID},{CsvStr(item.CategoryName)},{item.CategoryIcon.Name}");
 				}
 			}
 		}

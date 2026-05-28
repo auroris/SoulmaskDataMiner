@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Crystal Ferrai
+// Copyright 2026 Crystal Ferrai
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ namespace SoulmaskDataMiner
 		/// <summary>
 		/// Called by the mine runner to run this data miner
 		/// </summary>
-		/// <param name="providerManager">Provides access to gata resources</param>
+		/// <param name="providerManager">Provides access to game data resources</param>
 		/// <param name="config">Application config containing (among other things) the location of a directory which the miner can write to</param>
 		/// <param name="logger">For logging any output messages while running</param>
 		/// <param name="sqlWriter">Add sql statements needed to perform a database update to this writer</param>
@@ -70,7 +70,7 @@ namespace SoulmaskDataMiner
 	}
 
 	/// <summary>
-	/// Indicates whether a data miner requires that class metadata is avaialble.
+	/// Indicates whether a data miner requires that class metadata is available.
 	/// </summary>
 	[AttributeUsage(AttributeTargets.Class)]
 	internal class RequireClassDataAttribute : Attribute
@@ -84,7 +84,7 @@ namespace SoulmaskDataMiner
 	}
 
 	/// <summary>
-	/// Indicates whether a data miner requires that a loot database is avaialble.
+	/// Indicates whether a data miner requires that a loot database is available.
 	/// </summary>
 	[AttributeUsage(AttributeTargets.Class)]
 	internal class RequireLootDatabaseAttribute : Attribute

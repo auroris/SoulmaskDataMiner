@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Crystal Ferrai
+// Copyright 2026 Crystal Ferrai
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ namespace SoulmaskDataMiner.Data
 		/// </returns>
 		/// <remarks>
 		/// Values will only be combined if their GetHashCode and Equals functions both indicate
-		/// that they are the same value. This will work by defualt for primitive types. Complex
+		/// that they are the same value. This will work by default for primitive types. Complex
 		/// types will need to implement these functions to ensure desired results.
 		/// </remarks>
 		public static IEnumerable<WeightedValue<T>> Reduce(IEnumerable<WeightedValue<T>> collection)

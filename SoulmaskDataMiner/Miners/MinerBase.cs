@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Crystal Ferrai
+// Copyright 2026 Crystal Ferrai
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ using SoulmaskDataMiner.IO;
 namespace SoulmaskDataMiner.Miners
 {
 	/// <summary>
-	/// Base class for all data mienrs
+	/// Base class for all data miners
 	/// </summary>
 	internal abstract class MinerBase : IDataMiner
 	{
