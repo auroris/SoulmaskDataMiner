@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Crystal Ferrai
+// Copyright 2026 Crystal Ferrai
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,11 @@ namespace SoulmaskDataMiner.IO
 	internal static class TextureExporter
 	{
 		/// <summary>
+		/// Whether to export textures
+		/// </summary>
+		public static bool Enabled { get; set; } = true;
+
+		/// <summary>
 		/// Export the first texture found within an asset's exports
 		/// </summary>
 		/// <param name="provider">The provider to load the asset from</param>
@@ -36,6 +41,8 @@ namespace SoulmaskDataMiner.IO
 		/// <returns>True if the export succeeded, false on failure or if no texture was found</returns>
 		public static bool ExportFirstTexture(IFileProvider provider, string assetPath, bool includePath, Logger logger, string outDir)
 		{
+			if (!Enabled) return true;
+
 			UTexture2D? texture = DataUtil.LoadFirstTexture(provider, assetPath, logger);
 			if (texture is null) return false;
 
@@ -52,6 +59,8 @@ namespace SoulmaskDataMiner.IO
 		/// <returns>True if the export succeeded, false on failure</returns>
 		public static bool ExportTexture(UTexture2D texture, bool includePath, Logger logger, string outDir)
 		{
+			if (!Enabled) return true;
+
 			string outPath = Path.Combine(outDir, $"{(includePath ? ConvertAssetPath(texture.GetPathName()) : texture.Name)}.png");
 			try
 			{
@@ -72,12 +81,16 @@ namespace SoulmaskDataMiner.IO
 
 			if (!texture.SRGB)
 			{
-				SKColor[] pixels = bitmap.Pixels;
-				for (int i = 0; i < pixels.Length; ++i)
+				unsafe
 				{
-					pixels[i] = LinearToSrgb(pixels[i]);
+					SKColor* ptr = (SKColor*)bitmap.GetPixels().ToPointer();
+					int count = bitmap.Width * bitmap.Height;
+					for (int i = 0; i < count; ++i)
+					{
+						ptr[i] = LinearToSrgb(ptr[i]);
+					}
 				}
-				bitmap.Pixels = pixels;
+				bitmap.NotifyPixelsChanged();
 			}
 
 			SKData data = bitmap.Encode(SKEncodedImageFormat.Png, 100);

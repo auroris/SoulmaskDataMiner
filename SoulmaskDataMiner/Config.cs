@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Crystal Ferrai
+// Copyright 2026 Crystal Ferrai
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CUE4Parse.UE4.Versions;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
@@ -47,12 +48,24 @@ namespace SoulmaskDataMiner
 		/// </summary>
 		public IReadOnlyList<string>? Miners { get; set; }
 
+		/// <summary>
+		/// The list of languages to mine
+		/// </summary>
+		public IReadOnlyList<ELanguage> Languages { get; set; }
+
+		/// <summary>
+		/// Whether to export textures
+		/// </summary>
+		public bool ExportTextures { get; set; }
+
 		private Config()
 		{
 			GameContentDirectory = null!;
 			OutputDirectory = null!;
 			EncryptionKey = null;
 			Miners = null;
+			Languages = new List<ELanguage>() { ELanguage.English };
+			ExportTextures = true;
 		}
 
 		public static bool TryParseCommandLine(string[] args, Logger logger, [NotNullWhen(true)] out Config? result)
@@ -96,7 +109,7 @@ namespace SoulmaskDataMiner
 							}
 							else
 							{
-								logger.Error("Missing parameter for --key argument");
+								logger.Error("Missing parameter for --classes argument");
 								result = null;
 								return false;
 							}
@@ -137,6 +150,56 @@ namespace SoulmaskDataMiner
 							else
 							{
 								logger.Error("Missing parameter for --miners argument");
+								result = null;
+								return false;
+							}
+							break;
+						case "no-textures":
+							instance.ExportTextures = false;
+							break;
+						case "lang":
+						case "languages":
+							if (i < args.Length - 1 && !args[i + 1].StartsWith("--"))
+							{
+								string langParam = args[i + 1].Trim();
+								if (string.Equals(langParam, "all", StringComparison.OrdinalIgnoreCase))
+								{
+									instance.Languages = AllSupportedLanguages;
+								}
+								else
+								{
+									string[] parts = langParam.Split(',', StringSplitOptions.RemoveEmptyEntries);
+									List<ELanguage> parsedLangs = new();
+									foreach (string part in parts)
+									{
+										string trimmed = part.Trim();
+										if (sLanguageMap.TryGetValue(trimmed, out ELanguage parsedLang))
+										{
+											if (!parsedLangs.Contains(parsedLang))
+											{
+												parsedLangs.Add(parsedLang);
+											}
+										}
+										else
+										{
+											logger.Error($"Unrecognized language '{trimmed}'. Supported languages are: English, Chinese, Spanish, Russian, Japanese, Korean, French, German, pt.");
+											result = null;
+											return false;
+										}
+									}
+									if (parsedLangs.Count == 0)
+									{
+										logger.Error("No valid languages specified for --lang argument");
+										result = null;
+										return false;
+									}
+									instance.Languages = parsedLangs;
+								}
+								++i;
+							}
+							else
+							{
+								logger.Error("Missing parameter for --lang argument");
 								result = null;
 								return false;
 							}
@@ -219,11 +282,43 @@ namespace SoulmaskDataMiner
 			logger.Log(logLevel, $"{indent}  --miners [miners] Comma separated list of miners to run. If not specified,");
 			logger.Log(logLevel, $"{indent}                    default miners will run.");
 			logger.LogEmptyLine(logLevel);
-			logger.Log(logLevel, $"{indent}Avaialable Miners");
+			logger.Log(logLevel, $"{indent}  --lang [languages] Comma separated list of languages to mine (e.g. en,zh).");
+			logger.Log(logLevel, $"{indent}                     Specify 'all' to mine all 9 supported languages.");
+			logger.Log(logLevel, $"{indent}                     Supported: en, zh, es, ru, ja, ko, fr, de, pt.");
+			logger.LogEmptyLine(logLevel);
+			logger.Log(logLevel, $"{indent}  --no-textures     Skip exporting textures/icons to speed up mining.");
+			logger.LogEmptyLine(logLevel);
+			logger.Log(logLevel, $"{indent}Available Miners");
 			logger.LogEmptyLine(logLevel);
 			logger.Log(logLevel, $"{indent}  Default:    {string.Join(',', defaultMiners)}");
 			logger.LogEmptyLine(logLevel);
 			logger.Log(logLevel, $"{indent}  Additional: {string.Join(',', additionalMiners)}");
 		}
+
+		public static readonly IReadOnlyList<ELanguage> AllSupportedLanguages = new ELanguage[]
+		{
+			ELanguage.English,
+			ELanguage.Chinese,
+			ELanguage.Spanish,
+			ELanguage.Russian,
+			ELanguage.Japanese,
+			ELanguage.Korean,
+			ELanguage.French,
+			ELanguage.German,
+			ELanguage.PortugueseBrazil
+		};
+
+		private static readonly Dictionary<string, ELanguage> sLanguageMap = new(StringComparer.OrdinalIgnoreCase)
+		{
+			{ "en", ELanguage.English },
+			{ "zh", ELanguage.Chinese },
+			{ "es", ELanguage.Spanish },
+			{ "ru", ELanguage.Russian },
+			{ "ja", ELanguage.Japanese },
+			{ "ko", ELanguage.Korean },
+			{ "fr", ELanguage.French },
+			{ "de", ELanguage.German },
+			{ "pt", ELanguage.PortugueseBrazil }
+		};
 	}
 }

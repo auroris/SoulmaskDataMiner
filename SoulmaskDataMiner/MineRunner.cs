@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Crystal Ferrai
+// Copyright 2026 Crystal Ferrai
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CUE4Parse.UE4.Versions;
 using SoulmaskDataMiner.GameData;
 using SoulmaskDataMiner.IO;
 using System.Diagnostics;
@@ -29,6 +30,8 @@ namespace SoulmaskDataMiner
 
 		private readonly Config mConfig;
 
+		private readonly ELanguage mLanguage;
+
 		private readonly Logger mLogger;
 
 		private readonly ProviderManager mProviderManager;
@@ -39,11 +42,12 @@ namespace SoulmaskDataMiner
 
 		private bool mRequireLootDatabase;
 
-		public MineRunner(Config config, Logger logger)
+		public MineRunner(Config config, ELanguage language, Logger logger)
 		{
 			mConfig = config;
+			mLanguage = language;
 			mLogger = logger;
-			mProviderManager = new ProviderManager(config);
+			mProviderManager = new ProviderManager(config, language);
 			mMiners = new();
 			mRequireHeirarchy = false;
 			mRequireLootDatabase = false;
@@ -298,6 +302,23 @@ namespace SoulmaskDataMiner
 			{
 				mLogger.Important($"The following miners will be run: {string.Join(',', mMiners.Select(m => m.Name))}");
 			}
+		}
+
+		public static string GetLanguageCode(ELanguage language)
+		{
+			return language switch
+			{
+				ELanguage.English => "en",
+				ELanguage.Chinese => "zh",
+				ELanguage.Spanish => "es",
+				ELanguage.Russian => "ru",
+				ELanguage.Japanese => "ja",
+				ELanguage.Korean => "ko",
+				ELanguage.French => "fr",
+				ELanguage.German => "de",
+				ELanguage.PortugueseBrazil => "pt",
+				_ => "en"
+			};
 		}
 	}
 }

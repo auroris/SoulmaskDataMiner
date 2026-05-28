@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Crystal Ferrai
+// Copyright 2026 Crystal Ferrai
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,8 @@ namespace SoulmaskDataMiner
 		private bool mIsDisposed;
 
 		private readonly Config mConfig;
+
+		private readonly ELanguage mLanguage;
 
 		private readonly DefaultFileProvider mProvider;
 
@@ -77,7 +79,7 @@ namespace SoulmaskDataMiner
 			{
 				if (mAchievements is null)
 				{
-					throw new InvalidOperationException("Achiements not found. Has the provider manager been initialized?");
+					throw new InvalidOperationException("Achievements not found. Has the provider manager been initialized?");
 				}
 				return mAchievements;
 			}
@@ -95,9 +97,10 @@ namespace SoulmaskDataMiner
 			}
 		}
 
-		public ProviderManager(Config config)
+		public ProviderManager(Config config, ELanguage language)
 		{
 			mConfig = config;
+			mLanguage = language;
 			mProvider = new DefaultFileProvider(Path.Combine(config.GameContentDirectory, "Paks"), SearchOption.TopDirectoryOnly, null, null);
 		}
 
@@ -178,7 +181,7 @@ namespace SoulmaskDataMiner
 
 			mProvider.PostMount();
 
-			mProvider.ChangeCulture(mProvider.GetLanguageCode(ELanguage.English));
+			mProvider.ChangeCulture(MineRunner.GetLanguageCode(mLanguage));
 		}
 
 		private bool LoadClassMetaData(Logger logger)

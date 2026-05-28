@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Crystal Ferrai
+// Copyright 2026 Crystal Ferrai
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,8 @@
 // limitations under the License.
 
 using CUE4Parse.Compression;
+using CUE4Parse.UE4.Versions;
+using SoulmaskDataMiner.IO;
 
 namespace SoulmaskDataMiner
 {
@@ -36,27 +38,63 @@ namespace SoulmaskDataMiner
 				return OnExit(1);
 			}
 
-			try
-			{
-				Directory.CreateDirectory(config.OutputDirectory);
-			}
-			catch (Exception ex)
-			{
-				logger.Log(LogLevel.Fatal, $"Could not access/create output directory \"{config.OutputDirectory}\". [{ex.GetType().FullName}] {ex.Message}");
-				return OnExit(1);
-			}
-
 			string assemblyDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)!;
 
 			ZlibHelper.Initialize(Path.Combine(assemblyDir, ZlibHelper.DLL_NAME));
 			OodleHelper.Initialize(Path.Combine(assemblyDir, OodleHelper.OODLE_NAME_CURRENT));
 
-			bool success;
-			using (MineRunner runner = new(config, logger))
+			bool success = true;
+			string originalOutputDirectory = config.OutputDirectory;
+
+			for (int langIndex = 0; langIndex < config.Languages.Count; langIndex++)
 			{
-				if (!runner.Initialize()) return OnExit(1);
-				success = runner.Run();
+				ELanguage language = config.Languages[langIndex];
+				string langCode = MineRunner.GetLanguageCode(language);
+
+				if (config.Languages.Count > 1)
+				{
+					logger.Important($"\n--- Mining language: {language} ({langCode}) ---");
+				}
+				else if (language != ELanguage.English)
+				{
+					logger.Important($"\n--- Mining language: {language} ({langCode}) ---");
+				}
+
+				string localizedOutputDirectory = originalOutputDirectory;
+				if (config.Languages.Count > 1 || language != ELanguage.English)
+				{
+					localizedOutputDirectory = Path.Combine(originalOutputDirectory, langCode);
+				}
+
+				try
+				{
+					Directory.CreateDirectory(localizedOutputDirectory);
+				}
+				catch (Exception ex)
+				{
+					logger.Log(LogLevel.Fatal, $"Could not access/create output directory \"{localizedOutputDirectory}\". [{ex.GetType().FullName}] {ex.Message}");
+					success = false;
+					continue;
+				}
+
+				config.OutputDirectory = localizedOutputDirectory;
+				TextureExporter.Enabled = config.ExportTextures && (langIndex == 0);
+
+				bool langSuccess;
+				using (MineRunner runner = new(config, language, logger))
+				{
+					if (!runner.Initialize())
+					{
+						success = false;
+						continue;
+					}
+					langSuccess = runner.Run();
+				}
+
+				success &= langSuccess;
 			}
+
+			config.OutputDirectory = originalOutputDirectory;
 
 			logger.Important("Done.");
 
