@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Crystal Ferrai
+// Copyright 2026 Crystal Ferrai
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ using CUE4Parse.UE4.Objects.UObject;
 namespace SoulmaskDataMiner.Data
 {
 	/// <summary>
-	/// Wrapper around a <see cref="FPackageIndex"> that can be used in hash sets and as dictionary keys
+	/// Wrapper around a <see cref="FPackageIndex"/> that can be used in hash sets and as dictionary keys
 	/// </summary>
 	internal class EquatablePackageIndex : IEquatable<EquatablePackageIndex>, IEquatable<FPackageIndex>
 	{
@@ -71,34 +71,38 @@ namespace SoulmaskDataMiner.Data
 			return value.Value;
 		}
 
-		public static bool operator ==(EquatablePackageIndex a, EquatablePackageIndex b)
+		public static bool operator ==(EquatablePackageIndex? a, EquatablePackageIndex? b)
 		{
+			if (ReferenceEquals(a, b)) return true;
+			if (a is null || b is null) return false;
 			return a.Equals(b);
 		}
 
-		public static bool operator !=(EquatablePackageIndex a, EquatablePackageIndex b)
+		public static bool operator !=(EquatablePackageIndex? a, EquatablePackageIndex? b)
 		{
-			return !a.Equals(b);
+			return !(a == b);
 		}
 
-		public static bool operator ==(EquatablePackageIndex a, FPackageIndex b)
+		public static bool operator ==(EquatablePackageIndex? a, FPackageIndex b)
 		{
+			if (a is null) return false;
 			return a.Equals(b);
 		}
 
-		public static bool operator !=(EquatablePackageIndex a, FPackageIndex b)
+		public static bool operator !=(EquatablePackageIndex? a, FPackageIndex b)
 		{
-			return !a.Equals(b);
+			return !(a == b);
 		}
 
-		public static bool operator ==(FPackageIndex a, EquatablePackageIndex b)
+		public static bool operator ==(FPackageIndex a, EquatablePackageIndex? b)
 		{
+			if (b is null) return false;
 			return b.Equals(a);
 		}
 
-		public static bool operator !=(FPackageIndex a, EquatablePackageIndex b)
+		public static bool operator !=(FPackageIndex a, EquatablePackageIndex? b)
 		{
-			return !b.Equals(a);
+			return !(a == b);
 		}
 	}
 }

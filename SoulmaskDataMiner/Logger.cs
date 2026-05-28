@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Crystal Ferrai
+// Copyright 2026 Crystal Ferrai
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ namespace SoulmaskDataMiner
 	internal class Logger
 	{
 		private readonly TextWriter[] mWriters;
+		private readonly object mSyncLock = new();
 
 		/// <summary>
 		/// The minimum level of messages to print. Logged messages below this threshold will be discarded
@@ -57,22 +58,25 @@ namespace SoulmaskDataMiner
 		{
 			if (level < LogLevel) return;
 
-			OnPreLog(level, message);
+			lock (mSyncLock)
+			{
+				OnPreLog(level, message);
 
-			if (level == LogLevel.Warning)
-			{
-				mWriters[(int)level].WriteLine($"[WARNING] {message}");
-			}
-			else if (level >= LogLevel.Error)
-			{
-				mWriters[(int)level].WriteLine($"[ERROR] {message}");
-			}
-			else
-			{
-				mWriters[(int)level].WriteLine(message);
-			}
+				if (level == LogLevel.Warning)
+				{
+					mWriters[(int)level].WriteLine($"[WARNING] {message}");
+				}
+				else if (level >= LogLevel.Error)
+				{
+					mWriters[(int)level].WriteLine($"[ERROR] {message}");
+				}
+				else
+				{
+					mWriters[(int)level].WriteLine(message);
+				}
 
-			OnPostLog(level, message);
+				OnPostLog(level, message);
+			}
 		}
 
 		/// <summary>
@@ -82,11 +86,14 @@ namespace SoulmaskDataMiner
 		{
 			if (level < LogLevel) return;
 
-			OnPreLog(level, string.Empty);
+			lock (mSyncLock)
+			{
+				OnPreLog(level, string.Empty);
 
-			mWriters[(int)level].WriteLine(string.Empty);
+				mWriters[(int)level].WriteLine(string.Empty);
 
-			OnPostLog(level, string.Empty);
+				OnPostLog(level, string.Empty);
+			}
 		}
 
 		/// <summary>

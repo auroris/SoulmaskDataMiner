@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Crystal Ferrai
+// Copyright 2026 Crystal Ferrai
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -177,29 +177,26 @@ namespace SoulmaskDataMiner.Data
 			TRange<T> value = new();
 			int valueSize = Unsafe.SizeOf<TRange<T>>();
 
-			byte[] buffer = new byte[valueSize];
-			fixed(byte* bufferPtr = buffer)
-			{
-				byte* pos = bufferPtr;
+			byte* bufferPtr = stackalloc byte[valueSize];
+			byte* pos = bufferPtr;
 
-				byte lowerType = (byte)lowerBoundType.Value;
-				Unsafe.Copy(pos, ref lowerType);
-				++pos;
+			byte lowerType = (byte)lowerBoundType.Value;
+			Unsafe.Copy(pos, ref lowerType);
+			++pos;
 
-				T lowerValue = lowerBoundValue.Value;
-				Unsafe.Copy(pos, ref lowerValue);
-				pos += Unsafe.SizeOf<T>();
+			T lowerValue = lowerBoundValue.Value;
+			Unsafe.Copy(pos, ref lowerValue);
+			pos += Unsafe.SizeOf<T>();
 
-				byte upperType = (byte)upperBoundType.Value;
-				Unsafe.Copy(pos, ref upperType);
-				++pos;
+			byte upperType = (byte)upperBoundType.Value;
+			Unsafe.Copy(pos, ref upperType);
+			++pos;
 
-				T upperValue = upperBoundValue.Value;
-				Unsafe.Copy(pos, ref upperValue);
-				pos += Unsafe.SizeOf<T>();
+			T upperValue = upperBoundValue.Value;
+			Unsafe.Copy(pos, ref upperValue);
+			pos += Unsafe.SizeOf<T>();
 
-				value = Unsafe.ReadUnaligned<TRange<T>>(bufferPtr);
-			}
+			value = Unsafe.ReadUnaligned<TRange<T>>(bufferPtr);
 
 			return value;
 		}

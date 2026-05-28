@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Crystal Ferrai
+// Copyright 2026 Crystal Ferrai
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -70,47 +70,58 @@ namespace SoulmaskDataMiner.GameData
 				}
 			}
 
-			foreach (var pair in providerManager.Provider.Files)
-			{
-				if (!pair.Value.Extension.Equals("uasset", StringComparison.OrdinalIgnoreCase)) continue;
+			var uassetFiles = providerManager.Provider.Files.Values
+				.Where(f => f.Extension.Equals("uasset", StringComparison.OrdinalIgnoreCase))
+				.ToList();
 
+			System.Threading.Tasks.Parallel.ForEach(uassetFiles, file =>
+			{
 				Package? package;
 				try
 				{
-					package = providerManager.Provider.LoadPackage(pair.Value) as Package;
+					package = providerManager.Provider.LoadPackage(file) as Package;
 				}
 				catch
 				{
 					// If an asset gets corrupted, we end up here. This may occur due to a corrupt file patch from Steam, for example.
-					logger.Warning($"Failed to load asset. It may be corrupted. Path: {pair.Value.Path}");
-					continue;
+					lock (logger)
+					{
+						logger.Warning($"Failed to load asset. It may be corrupted. Path: {file.Path}");
+					}
+					return;
 				}
-				if (package is null) continue;
+				if (package is null) return;
 
 				foreach (FObjectExport export in package.ExportMap)
 				{
 					if (!export.ClassName.Equals("BlueprintGeneratedClass")) continue;
 
-					if (superMap.TryGetValue(export.ObjectName.Text, out InternalClassInfo classInfo))
+					lock (superMap)
 					{
-						if (!classInfo.SuperName!.Equals(export.SuperIndex.Name))
+						if (superMap.TryGetValue(export.ObjectName.Text, out InternalClassInfo classInfo))
 						{
-							logger.Warning($"Class {export.ObjectName.Text} found multiple times with different super classes");
+							if (!classInfo.SuperName!.Equals(export.SuperIndex.Name))
+							{
+								lock (logger)
+								{
+									logger.Warning($"Class {export.ObjectName.Text} found multiple times with different super classes");
+								}
+							}
+							else if (classInfo.Export is null)
+							{
+								classInfo.Export = export;
+								superMap[export.ObjectName.Text] = classInfo;
+							}
 						}
-						else if (classInfo.Export is null)
+						else
 						{
-							classInfo.Export = export;
-							superMap[export.ObjectName.Text] = classInfo;
+							superMap.Add(export.ObjectName.Text, new(export, export.SuperIndex.Name));
 						}
-					}
-					else
-					{
-						superMap.Add(export.ObjectName.Text, new(export, export.SuperIndex.Name));
 					}
 
 					break;
 				}
-			}
+			});
 
 			foreach (var pair in superMap)
 			{

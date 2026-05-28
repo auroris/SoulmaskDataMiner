@@ -121,37 +121,57 @@ namespace SoulmaskDataMiner
 
 			sqlWriter.WriteStartFile();
 
-			bool success = true;
-			foreach (IDataMiner miner in mMiners)
+			var results = new System.Collections.Concurrent.ConcurrentDictionary<IDataMiner, (bool Success, BufferedSqlWriter SqlWriter, double ElapsedMs)>();
+
+			System.Threading.Tasks.Parallel.ForEach(mMiners, miner =>
 			{
 				mLogger.Important($"Running data miner [{miner.Name}]...");
 
-				sqlWriter.WriteStartSection(miner.Name);
-
+				BufferedSqlWriter bufferedWriter = new();
 				Stopwatch timer = new Stopwatch();
 				timer.Start();
+
+				bool success = false;
 				if (Debugger.IsAttached)
 				{
 					// Allow exceptions to escape for easier debugging
-					success &= miner.Run(mProviderManager, mConfig, mLogger, sqlWriter);
+					success = miner.Run(mProviderManager, mConfig, mLogger, bufferedWriter);
 				}
 				else
 				{
 					try
 					{
-						success &= miner.Run(mProviderManager, mConfig, mLogger, sqlWriter);
+						success = miner.Run(mProviderManager, mConfig, mLogger, bufferedWriter);
 					}
 					catch (Exception ex)
 					{
 						mLogger.Log(LogLevel.Error, $"Data miner [{miner.Name}] failed! [{ex.GetType().FullName}] {ex.Message}");
-						success = false;
 					}
 				}
 				timer.Stop();
 
-				sqlWriter.WriteEndSection();
+				double elapsedMs = ((double)timer.ElapsedTicks / (double)Stopwatch.Frequency * 1000.0);
+				results.TryAdd(miner, (success, bufferedWriter, elapsedMs));
+			});
 
-				mLogger.Information($"[{miner.Name}] completed in {((double)timer.ElapsedTicks / (double)Stopwatch.Frequency * 1000.0):0.##}ms");
+			bool success = true;
+			foreach (IDataMiner miner in mMiners)
+			{
+				if (results.TryGetValue(miner, out var result))
+				{
+					success &= result.Success;
+
+					sqlWriter.WriteStartSection(miner.Name);
+					result.SqlWriter.Playback(sqlWriter);
+					sqlWriter.WriteEndSection();
+
+					mLogger.Information($"[{miner.Name}] completed in {result.ElapsedMs:0.##}ms");
+				}
+				else
+				{
+					mLogger.Log(LogLevel.Error, $"Data miner [{miner.Name}] was not executed or results were lost.");
+					success = false;
+				}
 			}
 
 			if (mRequireLootDatabase)
