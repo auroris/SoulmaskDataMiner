@@ -26,8 +26,6 @@ namespace SoulmaskDataMiner
 	/// </summary>
 	internal sealed class MineRunner : IDisposable
 	{
-		private bool mIsDisposed;
-
 		private readonly Config mConfig;
 
 		private readonly ELanguage mLanguage;
@@ -38,7 +36,7 @@ namespace SoulmaskDataMiner
 
 		private readonly List<IDataMiner> mMiners;
 
-		private bool mRequireHeirarchy;
+		private bool mRequireHierarchy;
 
 		private bool mRequireLootDatabase;
 
@@ -49,7 +47,7 @@ namespace SoulmaskDataMiner
 			mLogger = logger;
 			mProviderManager = new ProviderManager(config, language);
 			mMiners = new();
-			mRequireHeirarchy = false;
+			mRequireHierarchy = false;
 			mRequireLootDatabase = false;
 		}
 
@@ -63,50 +61,25 @@ namespace SoulmaskDataMiner
 			return true;
 		}
 
-		#region Dispose
 		public void Dispose()
 		{
-			Dispose(true);
-			GC.SuppressFinalize(this);
-		}
-
-		~MineRunner()
-		{
-			Dispose(false);
-		}
-
-		private void Dispose(bool disposing)
-		{
-			if (!mIsDisposed)
+			foreach (IDataMiner miner in mMiners)
 			{
-				if (disposing)
+				if (miner is IDisposable disposable)
 				{
-					// Dispose managed objects
-
-					foreach (IDataMiner miner in mMiners)
-					{
-						if (miner is IDisposable disposable)
-						{
-							disposable.Dispose();
-						}
-					}
-					mMiners.Clear();
-
-					mProviderManager.Dispose();
+					disposable.Dispose();
 				}
-
-				// Free unmanaged resources
-
-				mIsDisposed = true;
 			}
+			mMiners.Clear();
+
+			mProviderManager.Dispose();
 		}
-		#endregion
 
 		public bool Run()
 		{
-			if (mRequireHeirarchy)
+			if (mRequireHierarchy)
 			{
-				GameClassHeirarchy.Load(mProviderManager, mLogger);
+				GameClassHierarchy.Load(mProviderManager, mLogger);
 			}
 
 			if (mRequireLootDatabase)
@@ -128,8 +101,7 @@ namespace SoulmaskDataMiner
 				mLogger.Important($"Running data miner [{miner.Name}]...");
 
 				BufferedSqlWriter bufferedWriter = new();
-				Stopwatch timer = new Stopwatch();
-				timer.Start();
+				long startTimestamp = Stopwatch.GetTimestamp();
 
 				bool success = false;
 				if (Debugger.IsAttached)
@@ -148,18 +120,17 @@ namespace SoulmaskDataMiner
 						mLogger.Log(LogLevel.Error, $"Data miner [{miner.Name}] failed! [{ex.GetType().FullName}] {ex.Message}");
 					}
 				}
-				timer.Stop();
 
-				double elapsedMs = ((double)timer.ElapsedTicks / (double)Stopwatch.Frequency * 1000.0);
+				double elapsedMs = Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds;
 				results.TryAdd(miner, (success, bufferedWriter, elapsedMs));
 			});
 
-			bool success = true;
+			bool overallSuccess = true;
 			foreach (IDataMiner miner in mMiners)
 			{
 				if (results.TryGetValue(miner, out var result))
 				{
-					success &= result.Success;
+					overallSuccess &= result.Success;
 
 					sqlWriter.WriteStartSection(miner.Name);
 					result.SqlWriter.Playback(sqlWriter);
@@ -170,7 +141,7 @@ namespace SoulmaskDataMiner
 				else
 				{
 					mLogger.Log(LogLevel.Error, $"Data miner [{miner.Name}] was not executed or results were lost.");
-					success = false;
+					overallSuccess = false;
 				}
 			}
 
@@ -183,7 +154,7 @@ namespace SoulmaskDataMiner
 
 			sqlWriter.WriteEndFile();
 
-			return success;
+			return overallSuccess;
 		}
 
 		public static void ListAllMiners(out List<string> defaultMiners, out List<string> additionalMiners)
@@ -191,44 +162,15 @@ namespace SoulmaskDataMiner
 			defaultMiners = new();
 			additionalMiners = new();
 
-			Type minerInterface = typeof(IDataMiner);
-
-			Assembly assembly = Assembly.GetExecutingAssembly();
-			foreach (Type type in assembly.GetTypes())
+			foreach (MinerDescriptor desc in GetMinerDescriptors())
 			{
-				if (!type.IsAbstract && minerInterface.IsAssignableFrom(type))
+				if (desc.IsDefault)
 				{
-					DefaultEnabledAttribute? defaultEnabledAttribute = type.GetCustomAttribute<DefaultEnabledAttribute>();
-					bool isDefaultMiner = defaultEnabledAttribute?.IsEnabled ?? true;
-
-					IDataMiner? miner;
-					try
-					{
-						miner = (IDataMiner?)Activator.CreateInstance(type);
-						if (miner == null)
-						{
-							continue;
-						}
-					}
-					catch
-					{
-						continue;
-					}
-
-					string name = miner.Name;
-					if (isDefaultMiner)
-					{
-						defaultMiners.Add(name);
-					}
-					else
-					{
-						additionalMiners.Add(name);
-					}
-
-					if (miner is IDisposable disposable)
-					{
-						disposable.Dispose();
-					}
+					defaultMiners.Add(desc.Name);
+				}
+				else
+				{
+					additionalMiners.Add(desc.Name);
 				}
 			}
 
@@ -238,74 +180,53 @@ namespace SoulmaskDataMiner
 
 		private void CreateMiners(IEnumerable<string>? minersToInclude)
 		{
-			mRequireHeirarchy = false;
+			mRequireHierarchy = false;
+			mRequireLootDatabase = false;
 
 			HashSet<string>? includeMiners = minersToInclude == null ? null : new HashSet<string>(minersToInclude.Select(m => m.ToLowerInvariant()));
-			bool forceInclude = includeMiners?.Contains("all", StringComparer.OrdinalIgnoreCase) ?? false;
+			bool forceInclude = includeMiners?.Contains("all") ?? false;
 
-			Type minerInterface = typeof(IDataMiner);
-
-			Assembly assembly = Assembly.GetExecutingAssembly();
-			foreach (Type type in assembly.GetTypes())
+			foreach (MinerDescriptor desc in GetMinerDescriptors())
 			{
-				if (!type.IsAbstract && minerInterface.IsAssignableFrom(type))
+				if (includeMiners == null && !desc.IsDefault)
 				{
-					if (includeMiners == null)
+					continue;
+				}
+
+				string nameLower = desc.Name.ToLowerInvariant();
+
+				if (desc.RequireClassData && mProviderManager.ClassMetadata is null)
+				{
+					mLogger.Warning($"Skipping miner \"{desc.Name}\" because class metadata has not been loaded. Use the --classes parameter to specify a class metadata file to load.");
+					includeMiners?.Remove(nameLower);
+					continue;
+				}
+
+				if (!forceInclude && !(includeMiners?.Contains(nameLower) ?? true))
+				{
+					continue;
+				}
+
+				IDataMiner? miner;
+				try
+				{
+					miner = (IDataMiner?)Activator.CreateInstance(desc.Type);
+					if (miner == null)
 					{
-						DefaultEnabledAttribute? defaultEnabledAttribute = type.GetCustomAttribute<DefaultEnabledAttribute>();
-						if (!(defaultEnabledAttribute?.IsEnabled ?? true))
-						{
-							continue;
-						}
-					}
-
-					RequireHeirarchyAttribute? requireHeirarchyAttribute = type.GetCustomAttribute<RequireHeirarchyAttribute>();
-					bool requireHeirarchy = requireHeirarchyAttribute?.IsRequired ?? false;
-
-					RequireClassDataAttribute? requireClassDataAttribute = type.GetCustomAttribute<RequireClassDataAttribute>();
-					if ((requireClassDataAttribute?.IsRequired ?? false) && mProviderManager.ClassMetadata is null)
-					{
-						IDataMiner? temp = (IDataMiner?)Activator.CreateInstance(type);
-						mLogger.Warning($"Skipping miner \"{temp?.Name ?? type.Name}\" because class metadata has not been loaded. Use the --classes parameter to specify a class metadata file to load.");
-
-						if (temp is not null)
-						{
-							includeMiners?.RemoveWhere(n => n.Equals(temp.Name, StringComparison.OrdinalIgnoreCase));
-						}
+						mLogger.Log(LogLevel.Error, $"Could not create an instance of {desc.Type.Name}. Ensure it has a parameterless constructor. This miner will not run.");
 						continue;
-					}
-
-					RequireLootDatabaseAttribute? requireLootDatabaseAttribute = type.GetCustomAttribute<RequireLootDatabaseAttribute>();
-					bool requireLootDatabase = requireLootDatabaseAttribute?.IsRequired ?? false;
-
-					IDataMiner? miner;
-					try
-					{
-						miner = (IDataMiner?)Activator.CreateInstance(type);
-						if (miner == null)
-						{
-							mLogger.Log(LogLevel.Error, $"Could not create an instance of {type.Name}. Ensure it has a parameterless constructor. This miner will not run.");
-							continue;
-						}
-					}
-					catch (Exception ex)
-					{
-						mLogger.Log(LogLevel.Error, $"Could not create an instance of {type.Name}. This miner will not run. [{ex.GetType().FullName}] {ex.Message}");
-						continue;
-					}
-					string name = miner.Name.ToLowerInvariant();
-					if (forceInclude || (includeMiners?.Contains(name) ?? true))
-					{
-						includeMiners?.Remove(name);
-						mMiners.Add(miner);
-						mRequireHeirarchy |= requireHeirarchy;
-						mRequireLootDatabase |= requireLootDatabase;
-					}
-					else if (miner is IDisposable disposable)
-					{
-						disposable.Dispose();
 					}
 				}
+				catch (Exception ex)
+				{
+					mLogger.Log(LogLevel.Error, $"Could not create an instance of {desc.Type.Name}. This miner will not run. [{ex.GetType().FullName}] {ex.Message}");
+					continue;
+				}
+
+				includeMiners?.Remove(nameLower);
+				mMiners.Add(miner);
+				mRequireHierarchy |= desc.RequireHierarchy;
+				mRequireLootDatabase |= desc.RequireLootDatabase;
 			}
 
 			includeMiners?.RemoveWhere(n => n.Equals("all", StringComparison.OrdinalIgnoreCase));
@@ -324,21 +245,41 @@ namespace SoulmaskDataMiner
 			}
 		}
 
-		public static string GetLanguageCode(ELanguage language)
+		private readonly record struct MinerDescriptor(
+			Type Type,
+			string Name,
+			bool IsDefault,
+			bool RequireHierarchy,
+			bool RequireClassData,
+			bool RequireLootDatabase);
+
+		private static IReadOnlyList<MinerDescriptor>? sMinerDescriptors;
+
+		// Single assembly scan; cached for the process lifetime. Reads names from MinerNameAttribute
+		// so callers don't need to instantiate a miner just to learn its name.
+		private static IReadOnlyList<MinerDescriptor> GetMinerDescriptors()
 		{
-			return language switch
+			if (sMinerDescriptors is not null) return sMinerDescriptors;
+
+			Type minerInterface = typeof(IDataMiner);
+			List<MinerDescriptor> result = new();
+			foreach (Type type in Assembly.GetExecutingAssembly().GetTypes())
 			{
-				ELanguage.English => "en",
-				ELanguage.Chinese => "zh",
-				ELanguage.Spanish => "es",
-				ELanguage.Russian => "ru",
-				ELanguage.Japanese => "ja",
-				ELanguage.Korean => "ko",
-				ELanguage.French => "fr",
-				ELanguage.German => "de",
-				ELanguage.PortugueseBrazil => "pt",
-				_ => "en"
-			};
+				if (type.IsAbstract || !minerInterface.IsAssignableFrom(type)) continue;
+
+				string? name = type.GetCustomAttribute<MinerNameAttribute>()?.Name;
+				if (name is null) continue;
+
+				bool isDefault = type.GetCustomAttribute<DefaultEnabledAttribute>()?.IsEnabled ?? true;
+				bool requireHierarchy = type.GetCustomAttribute<RequireHierarchyAttribute>()?.IsRequired ?? false;
+				bool requireClassData = type.GetCustomAttribute<RequireClassDataAttribute>()?.IsRequired ?? false;
+				bool requireLootDatabase = type.GetCustomAttribute<RequireLootDatabaseAttribute>()?.IsRequired ?? false;
+
+				result.Add(new MinerDescriptor(type, name, isDefault, requireHierarchy, requireClassData, requireLootDatabase));
+			}
+
+			sMinerDescriptors = result;
+			return result;
 		}
 	}
 }

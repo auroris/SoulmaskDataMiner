@@ -171,7 +171,7 @@ namespace SoulmaskDataMiner.MapUtil.Processor
 				processArenaObject(obj);
 				if ((spawnerInfos is null || winCountInfos is null) && obj.Class?.Load() is UBlueprintGeneratedClass objClass)
 				{
-					GameClassHeirarchy.SearchInheritance(objClass, (current) =>
+					GameClassHierarchy.SearchInheritance(objClass, (current) =>
 					{
 						UObject? currentObj = current.ClassDefaultObject.Load();
 						if (currentObj is null) return true;

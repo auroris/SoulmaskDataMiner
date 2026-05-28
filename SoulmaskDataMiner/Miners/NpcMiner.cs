@@ -27,10 +27,9 @@ namespace SoulmaskDataMiner.Miners
 	/// <summary>
 	/// Gathers information about NPC classes
 	/// </summary>
+	[MinerName("Npc")]
 	internal class NpcMiner : SubclassMinerBase
 	{
-		public override string Name => "Npc";
-
 		protected override string NameProperty => "MoRenMingZi";
 
 		private const string BaseClassName_NonHuman = "HCharacterDongWu";
@@ -45,7 +44,7 @@ namespace SoulmaskDataMiner.Miners
 			List<ObjectInfo> mechanical = new();
 			foreach (ObjectInfo nonHuman in nonHumans)
 			{
-				if (GameClassHeirarchy.Instance.IsDerivedFrom(nonHuman.ClassName, "BP_JiXie_Base_C"))
+				if (GameClassHierarchy.Instance.IsDerivedFrom(nonHuman.ClassName, "BP_JiXie_Base_C"))
 				{
 					mechanical.Add(nonHuman);
 				}

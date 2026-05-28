@@ -20,7 +20,9 @@ namespace SoulmaskDataMiner.IO
 	internal static class IOUtil
 	{
 		/// <summary>
-		/// Attempts to create a file. Will retry indefinitely until it succeeds or the application terminates
+		/// Attempts to create a file. If stdin is interactive, retries indefinitely on IO errors after the
+		/// user presses a key. If stdin is redirected (e.g. running unattended), the IOException is rethrown
+		/// so the program fails fast instead of hanging.
 		/// </summary>
 		/// <param name="path">Path to the file to create</param>
 		/// <param name="logger">Used to log messages about file creation issues for the user to see</param>
@@ -35,6 +37,11 @@ namespace SoulmaskDataMiner.IO
 				}
 				catch (IOException ex)
 				{
+					if (Console.IsInputRedirected)
+					{
+						logger.Log(LogLevel.Error, ex.Message);
+						throw;
+					}
 					logger.Log(LogLevel.Error, $"{ex.Message} Press Ctrl+C to abort or any other key to try again.");
 					Console.ReadKey(true);
 					logger.Important("Retrying...");

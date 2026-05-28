@@ -31,10 +31,9 @@ namespace SoulmaskDataMiner.Miners
 	/// <summary>
 	/// Mines data about game coefficient settings
 	/// </summary>
+	[MinerName("XiShu")]
 	internal class XiShuMiner : MinerBase
 	{
-		public override string Name => "XiShu";
-
 		public override bool Run(IProviderManager providerManager, Config config, Logger logger, ISqlWriter sqlWriter)
 		{
 			if (!TryFindXishu(providerManager, logger, out IReadOnlyDictionary<int, List<XishuData>>? xishuMap))

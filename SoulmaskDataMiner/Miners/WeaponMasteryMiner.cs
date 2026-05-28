@@ -33,10 +33,9 @@ namespace SoulmaskDataMiner.Miners
 	/// <summary>
 	/// Mines data related to weapon masteries (ZhuanJing)
 	/// </summary>
+	[MinerName("Mastery")]
 	internal class WeaponMasteryMiner : MinerBase
 	{
-		public override string Name => "Mastery";
-
 		public override bool Run(IProviderManager providerManager, Config config, Logger logger, ISqlWriter sqlWriter)
 		{
 			IReadOnlyDictionary<EWuQiLeiXing, List<MasteryData>>? masteries;
@@ -316,7 +315,7 @@ namespace SoulmaskDataMiner.Miners
 				for (int i = 0; i < pair.Value.Count; ++i)
 				{
 					if (pair.Value[i].Icon is null) continue;
-					TextureExporter.ExportTexture(pair.Value[i].Icon!, false, logger, outDir);
+					TextureExporter.ExportTexture(config,pair.Value[i].Icon!, false, logger, outDir);
 				}
 			}
 		}

@@ -23,42 +23,41 @@ namespace SoulmaskDataMiner.GameData
 	/// <summary>
 	/// Utility for gathering information about game object inheritance
 	/// </summary>
-	internal class GameClassHeirarchy
+	internal class GameClassHierarchy
 	{
-		private static GameClassHeirarchy? sInstance;
+		private static GameClassHierarchy? sInstance;
 
 		private readonly Dictionary<string, InternalClassInfo> mSuperMap;
 
 		public IReadOnlySet<string> FoliageComponentClasses { get; private set; }
 
 		/// <summary>
-		/// Gets the loaded class heiarchy.
+		/// Gets the loaded class hierarchy.
 		/// </summary>
 		/// <exception cref="InvalidOperationException">The hierarchy has not been loaded</exception>
-		public static GameClassHeirarchy Instance
+		public static GameClassHierarchy Instance
 		{
 			get
 			{
-				if (sInstance is null) throw new InvalidOperationException("GameClassHeirarchy has not been loaded. Any miner needing this resource should declare so by adding the RequireHierarchy attribute to the class.");
+				if (sInstance is null) throw new InvalidOperationException("GameClassHierarchy has not been loaded. Any miner needing this resource should declare so by adding the RequireHierarchy attribute to the class.");
 				return sInstance;
 			}
 		}
 
-		private GameClassHeirarchy(Dictionary<string, InternalClassInfo> superMap)
+		private GameClassHierarchy(Dictionary<string, InternalClassInfo> superMap)
 		{
 			mSuperMap = superMap;
 			FoliageComponentClasses = null!;
 		}
 
 		/// <summary>
-		/// Loads the class heirarchy, making it ready for miners to make use of
+		/// Loads the class hierarchy, making it ready for miners to make use of
 		/// </summary>
 		public static void Load(IProviderManager providerManager, Logger logger)
 		{
-			logger.Information("Loading class heirarchy...");
+			logger.Information("Loading class hierarchy...");
 
-			Stopwatch timer = new Stopwatch();
-			timer.Start();
+			long startTimestamp = Stopwatch.GetTimestamp();
 
 			Dictionary<string, InternalClassInfo> superMap = new();
 
@@ -84,10 +83,7 @@ namespace SoulmaskDataMiner.GameData
 				catch
 				{
 					// If an asset gets corrupted, we end up here. This may occur due to a corrupt file patch from Steam, for example.
-					lock (logger)
-					{
-						logger.Warning($"Failed to load asset. It may be corrupted. Path: {file.Path}");
-					}
+					logger.Warning($"Failed to load asset. It may be corrupted. Path: {file.Path}");
 					return;
 				}
 				if (package is null) return;
@@ -102,10 +98,7 @@ namespace SoulmaskDataMiner.GameData
 						{
 							if (!classInfo.SuperName!.Equals(export.SuperIndex.Name))
 							{
-								lock (logger)
-								{
-									logger.Warning($"Class {export.ObjectName.Text} found multiple times with different super classes");
-								}
+								logger.Warning($"Class {export.ObjectName.Text} found multiple times with different super classes");
 							}
 							else if (classInfo.Export is null)
 							{
@@ -153,8 +146,7 @@ namespace SoulmaskDataMiner.GameData
 				ObjectTypeRegistry.RegisterClass(component, typeof(UInstancedStaticMeshComponent));
 			}
 
-			timer.Stop();
-			logger.Information($"Blueprint hierarchy load completed in {timer.ElapsedTicks / (double)Stopwatch.Frequency:0.###}s");
+			logger.Information($"Blueprint hierarchy load completed in {Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds:0.###}s");
 		}
 
 		/// <summary>
@@ -204,7 +196,7 @@ namespace SoulmaskDataMiner.GameData
 		/// Search a blueprint and all super classes
 		/// </summary>
 		/// <param name="start">The blueprint to search first</param>
-		/// <param name="searchFunc">A function to call for the start class and each class in the super chain. Return true to stop the search or false to conitnue.</param>
+		/// <param name="searchFunc">A function to call for the start class and each class in the super chain. Return true to stop the search or false to continue.</param>
 		public static void SearchInheritance(UClass start, Predicate<UClass> searchFunc)
 		{
 			UClass? current = start;

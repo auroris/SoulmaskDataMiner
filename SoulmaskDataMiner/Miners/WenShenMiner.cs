@@ -28,10 +28,9 @@ namespace SoulmaskDataMiner.Miners
 	/// <summary>
 	/// Mines data about WenShen (body paints)
 	/// </summary>
+	[MinerName("WenShen")]
 	internal class WenShenMiner : MinerBase
 	{
-		public override string Name => "WenShen";
-
 		public override bool Run(IProviderManager providerManager, Config config, Logger logger, ISqlWriter sqlWriter)
 		{
 			IEnumerable<CombinedWenShenData> data = GetWenShenData(providerManager, logger);
@@ -238,10 +237,10 @@ namespace SoulmaskDataMiner.Miners
 			string outDir = Path.Combine(config.OutputDirectory, Name, "icons");
 			foreach (CombinedWenShenData ws in data)
 			{
-				TextureExporter.ExportTexture(ws.Head.Icon, false, logger, outDir);
-				TextureExporter.ExportTexture(ws.Chest.Icon, false, logger, outDir);
-				TextureExporter.ExportTexture(ws.Arm.Icon, false, logger, outDir);
-				TextureExporter.ExportTexture(ws.Leg.Icon, false, logger, outDir);
+				TextureExporter.ExportTexture(config,ws.Head.Icon, false, logger, outDir);
+				TextureExporter.ExportTexture(config,ws.Chest.Icon, false, logger, outDir);
+				TextureExporter.ExportTexture(config,ws.Arm.Icon, false, logger, outDir);
+				TextureExporter.ExportTexture(config,ws.Leg.Icon, false, logger, outDir);
 			}
 		}
 

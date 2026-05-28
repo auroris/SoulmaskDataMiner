@@ -26,7 +26,7 @@ namespace SoulmaskDataMiner.Miners
 	/// <summary>
 	/// Base class for miners that gather information about specific class hierarchies
 	/// </summary>
-	[RequireHeirarchy(true)]
+	[RequireHierarchy(true)]
 	internal abstract class SubclassMinerBase : MinerBase
 	{
 		/// <summary>
@@ -57,7 +57,7 @@ namespace SoulmaskDataMiner.Miners
 			HashSet<ObjectInfo> infoSet = new();
 			foreach (string className in baseClassNames)
 			{
-				foreach (BlueprintClassInfo classInfo in GameClassHeirarchy.Instance.GetDerivedBlueprintClasses(className))
+				foreach (BlueprintClassInfo classInfo in GameClassHierarchy.Instance.GetDerivedBlueprintClasses(className))
 				{
 					if (classInfo.Export.ExportObject.Value is UClass classObj)
 					{

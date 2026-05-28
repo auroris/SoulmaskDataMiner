@@ -20,10 +20,9 @@ namespace SoulmaskDataMiner.Miners
 	/// Gathers information about building (JianZhu) classes, providing a
 	/// class-name to display-name lookup for downstream tooling.
 	/// </summary>
+	[MinerName("Building")]
 	internal class BuildingMiner : SubclassMinerBase
 	{
-		public override string Name => "Building";
-
 		protected override string NameProperty => "JianZhuDisplayName";
 
 		protected override string? IconProperty => "JianZhuIcon";
@@ -95,7 +94,7 @@ namespace SoulmaskDataMiner.Miners
 			foreach (ObjectInfo b in buildings)
 			{
 				if (b.Icon is null) continue;
-				TextureExporter.ExportTexture(b.Icon, false, logger, outDir);
+				TextureExporter.ExportTexture(config,b.Icon, false, logger, outDir);
 			}
 		}
 	}

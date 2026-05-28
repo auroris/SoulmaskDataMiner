@@ -30,7 +30,7 @@ namespace SoulmaskDataMiner.Data
 
 		public override int GetHashCode()
 		{
-			return Value.Name.GetHashCode();
+			return (Value.Name ?? string.Empty).GetHashCode();
 		}
 
 		public override bool Equals(object? obj)

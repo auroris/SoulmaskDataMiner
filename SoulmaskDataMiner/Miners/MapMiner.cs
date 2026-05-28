@@ -33,11 +33,9 @@ namespace SoulmaskDataMiner.Miners
 	/// <summary>
 	/// Mines map images and information about points of interest
 	/// </summary>
-	[RequireHeirarchy(true), RequireLootDatabase(true)]
+	[MinerName("Map"), RequireHierarchy(true), RequireLootDatabase(true)]
 	internal class MapMiner : MinerBase
 	{
-		public override string Name => "Map";
-
 		private static readonly MapData sMapData;
 
 		static MapMiner()
@@ -165,7 +163,7 @@ namespace SoulmaskDataMiner.Miners
 			UTexture2D? mapTexture = mapLevelData.WorldSettings.Properties.FirstOrDefault(p => p.Name.Text.Equals("Map2DTexture"))?.Tag?.GetValue<FPackageIndex>()?.ResolvedObject?.Load() as UTexture2D;
 			if (mapTexture is not null)
 			{
-				success &= TextureExporter.ExportTexture(mapTexture, false, logger, outDir);
+				success &= TextureExporter.ExportTexture(config,mapTexture, false, logger, outDir);
 			}
 			else
 			{
@@ -180,7 +178,7 @@ namespace SoulmaskDataMiner.Miners
 				{
 					if (texture is null || texture.Name.Equals(mapTexture?.Name)) continue;
 
-					success &= TextureExporter.ExportTexture(texture, false, logger, outDir);
+					success &= TextureExporter.ExportTexture(config,texture, false, logger, outDir);
 				}
 			}
 
@@ -298,7 +296,7 @@ namespace SoulmaskDataMiner.Miners
 			{
 				if (exported.Add(pair.Value[0].Icon.Name))
 				{
-					TextureExporter.ExportTexture(pair.Value[0].Icon, false, logger, outDir);
+					TextureExporter.ExportTexture(config,pair.Value[0].Icon, false, logger, outDir);
 				}
 				foreach (MapPoi poi in pair.Value)
 				{
@@ -306,7 +304,7 @@ namespace SoulmaskDataMiner.Miners
 
 					if (exported.Add(poi.Achievement.Icon.Name))
 					{
-						TextureExporter.ExportTexture(poi.Achievement.Icon, false, logger, outDir);
+						TextureExporter.ExportTexture(config,poi.Achievement.Icon, false, logger, outDir);
 					}
 				}
 			}
@@ -315,7 +313,7 @@ namespace SoulmaskDataMiner.Miners
 			{
 				if (exported.Add(icon.Name))
 				{
-					TextureExporter.ExportTexture(icon, false, logger, outDir);
+					TextureExporter.ExportTexture(config,icon, false, logger, outDir);
 				}
 			}
 		}

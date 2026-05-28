@@ -13,6 +13,7 @@
 // limitations under the License.
 
 using SoulmaskDataMiner.IO;
+using System.Reflection;
 
 namespace SoulmaskDataMiner.Miners
 {
@@ -21,7 +22,8 @@ namespace SoulmaskDataMiner.Miners
 	/// </summary>
 	internal abstract class MinerBase : IDataMiner
 	{
-		public abstract string Name { get; }
+		public virtual string Name => GetType().GetCustomAttribute<MinerNameAttribute>()?.Name
+			?? throw new InvalidOperationException($"Miner type {GetType().Name} is missing a [MinerName] attribute.");
 
 		public abstract bool Run(IProviderManager providerManager, Config config, Logger logger, ISqlWriter sqlWriter);
 

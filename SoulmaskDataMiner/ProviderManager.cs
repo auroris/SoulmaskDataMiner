@@ -25,10 +25,8 @@ namespace SoulmaskDataMiner
 	/// <summary>
 	/// Default implementation of IProviderManager
 	/// </summary>
-	internal class ProviderManager : IProviderManager, IDisposable
+	internal sealed class ProviderManager : IProviderManager, IDisposable
 	{
-		private bool mIsDisposed;
-
 		private readonly Config mConfig;
 
 		private readonly ELanguage mLanguage;
@@ -134,30 +132,8 @@ namespace SoulmaskDataMiner
 
 		public void Dispose()
 		{
-			Dispose(true);
-			GC.SuppressFinalize(this);
-		}
-
-		~ProviderManager()
-		{
-			Dispose(false);
-		}
-
-		private void Dispose(bool disposing)
-		{
-			if (!mIsDisposed)
-			{
-				if (disposing)
-				{
-					// Dispose managed objects
-					mResourceManager = null;
-					mProvider.Dispose();
-				}
-
-				// Free unmanaged resources
-
-				mIsDisposed = true;
-			}
+			mResourceManager = null;
+			mProvider.Dispose();
 		}
 
 		private void InitializeProvider(DefaultFileProvider provider)
@@ -181,7 +157,7 @@ namespace SoulmaskDataMiner
 
 			mProvider.PostMount();
 
-			mProvider.ChangeCulture(MineRunner.GetLanguageCode(mLanguage));
+			mProvider.ChangeCulture(Config.GetLanguageCode(mLanguage));
 		}
 
 		private bool LoadClassMetaData(Logger logger)
@@ -192,8 +168,7 @@ namespace SoulmaskDataMiner
 			{
 				logger.Information("Loading class metadata...");
 
-				Stopwatch timer = new();
-				timer.Start();
+				long startTimestamp = Stopwatch.GetTimestamp();
 
 				JObject root;
 
@@ -259,9 +234,7 @@ namespace SoulmaskDataMiner
 
 				mClassMetadata = classes;
 
-				timer.Stop();
-
-				logger.Information($"Class metadata loaded in {((double)timer.ElapsedTicks / (double)Stopwatch.Frequency * 1000.0):0.##}ms");
+				logger.Information($"Class metadata loaded in {Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds:0.##}ms");
 
 				return true;
 			}

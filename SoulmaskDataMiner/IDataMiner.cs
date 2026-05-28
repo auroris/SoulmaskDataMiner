@@ -39,6 +39,21 @@ namespace SoulmaskDataMiner
 	}
 
 	/// <summary>
+	/// Declares the public-facing name of a data miner (shown in logs and accepted by the
+	/// --miners filter). Required on every concrete <see cref="IDataMiner"/> implementation.
+	/// </summary>
+	[AttributeUsage(AttributeTargets.Class)]
+	internal class MinerNameAttribute : Attribute
+	{
+		public string Name { get; }
+
+		public MinerNameAttribute(string name)
+		{
+			Name = name;
+		}
+	}
+
+	/// <summary>
 	/// Indicates whether a data miner should be run when no filter has been applied.
 	/// </summary>
 	/// <remarks>
@@ -56,14 +71,14 @@ namespace SoulmaskDataMiner
 	}
 
 	/// <summary>
-	/// Indicates whether a data miner requires the use of the blueprint heirarchy.
+	/// Indicates whether a data miner requires the use of the blueprint hierarchy.
 	/// </summary>
 	[AttributeUsage(AttributeTargets.Class)]
-	internal class RequireHeirarchyAttribute : Attribute
+	internal class RequireHierarchyAttribute : Attribute
 	{
 		public bool IsRequired { get; set; }
 
-		public RequireHeirarchyAttribute(bool isRequired)
+		public RequireHierarchyAttribute(bool isRequired)
 		{
 			IsRequired = isRequired;
 		}

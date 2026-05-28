@@ -228,7 +228,7 @@ namespace SoulmaskDataMiner.MapUtil
 		{
 			const string chestBaseClass = "HJianZhuBaoXiang";
 
-			List<BlueprintClassInfo> chestBpClasses = new(GameClassHeirarchy.Instance.GetDerivedBlueprintClasses(chestBaseClass));
+			List<BlueprintClassInfo> chestBpClasses = new(GameClassHierarchy.Instance.GetDerivedBlueprintClasses(chestBaseClass));
 
 			Dictionary<string, UObject?> chestClasses = new();
 			foreach (BlueprintClassInfo bpClass in chestBpClasses)
@@ -282,7 +282,7 @@ namespace SoulmaskDataMiner.MapUtil
 
 			mEntranceMap = new();
 
-			foreach (BlueprintClassInfo classInfo in GameClassHeirarchy.Instance.GetDerivedBlueprintClasses("HJianZhuGameFunction"))
+			foreach (BlueprintClassInfo classInfo in GameClassHierarchy.Instance.GetDerivedBlueprintClasses("HJianZhuGameFunction"))
 			{
 				UBlueprintGeneratedClass? bpClass = (UBlueprintGeneratedClass?)classInfo.Export.ExportObject.Value;
 				UObject? defaultsObj = bpClass?.ClassDefaultObject.Load();

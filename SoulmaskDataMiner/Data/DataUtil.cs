@@ -74,6 +74,7 @@ namespace SoulmaskDataMiner.Data
 			return Enum.TryParse(name, out result);
 		}
 
+		/// <summary>
 		/// Attempts to read a property value as text
 		/// </summary>
 		/// <param name="property">The property to read</param>
@@ -173,7 +174,7 @@ namespace SoulmaskDataMiner.Data
 			if (!lowerBoundType.HasValue || !lowerBoundValue.HasValue) return null;
 			if (!upperBoundType.HasValue || !upperBoundValue.HasValue) return null;
 
-			// TRange is a readonly struct with no cosntructor, so we are using unsafe mode to write values.
+			// TRange is a readonly struct with no constructor, so we are using unsafe mode to write values.
 			TRange<T> value = new();
 			int valueSize = Unsafe.SizeOf<TRange<T>>();
 

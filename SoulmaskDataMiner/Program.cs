@@ -14,7 +14,6 @@
 
 using CUE4Parse.Compression;
 using CUE4Parse.UE4.Versions;
-using SoulmaskDataMiner.IO;
 
 namespace SoulmaskDataMiner
 {
@@ -49,7 +48,7 @@ namespace SoulmaskDataMiner
 			for (int langIndex = 0; langIndex < config.Languages.Count; langIndex++)
 			{
 				ELanguage language = config.Languages[langIndex];
-				string langCode = MineRunner.GetLanguageCode(language);
+				string langCode = Config.GetLanguageCode(language);
 
 				if (config.Languages.Count > 1)
 				{
@@ -78,7 +77,7 @@ namespace SoulmaskDataMiner
 				}
 
 				config.OutputDirectory = localizedOutputDirectory;
-				TextureExporter.Enabled = config.ExportTextures && (langIndex == 0);
+				config.IsTextureExportActive = config.ExportTextures && (langIndex == 0);
 
 				bool langSuccess;
 				using (MineRunner runner = new(config, language, logger))

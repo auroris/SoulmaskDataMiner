@@ -184,7 +184,7 @@ namespace SoulmaskDataMiner.MapUtil.Processor
 				searchProperties(obj);
 				if ((scgClasses.Count == 0 || rootComponent is null || !spawnInterval.HasValue) && obj.Class?.Load() is UBlueprintGeneratedClass objClass)
 				{
-					GameClassHeirarchy.SearchInheritance(objClass, (current) =>
+					GameClassHierarchy.SearchInheritance(objClass, (current) =>
 					{
 						UObject? currentObj = current.ClassDefaultObject.Load();
 						if (currentObj is null) return true;
@@ -481,7 +481,7 @@ namespace SoulmaskDataMiner.MapUtil.Processor
 					}
 					if (collectionMap.ContainsKey(npc.CharacterClass.Name)) continue;
 
-					GameClassHeirarchy.SearchInheritance(npc.CharacterClass, (current) =>
+					GameClassHierarchy.SearchInheritance(npc.CharacterClass, (current) =>
 					{
 						if (collectionClasses.Contains(current.Name)) return true;
 

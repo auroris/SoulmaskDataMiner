@@ -24,10 +24,9 @@ namespace SoulmaskDataMiner.Miners
 	/// <summary>
 	/// Gathers information about item classes
 	/// </summary>
+	[MinerName("Item")]
 	internal class ItemMiner : SubclassMinerBase
 	{
-		public override string Name => "Item";
-
 		protected override string NameProperty => "Name";
 
 		protected override string? DescriptionProperty => "Description";
@@ -227,13 +226,13 @@ namespace SoulmaskDataMiner.Miners
 			foreach (ItemData item in items)
 			{
 				if (item.Info.Icon is null) continue;
-				TextureExporter.ExportTexture(item.Info.Icon!, false, logger, outDir);
+				TextureExporter.ExportTexture(config,item.Info.Icon!, false, logger, outDir);
 			}
 
 			outDir = Path.Combine(outRoot, "item_cat");
 			foreach (ItemCategoryData category in categories.Values)
 			{
-				TextureExporter.ExportTexture(category.Icon, false, logger, outDir);
+				TextureExporter.ExportTexture(config,category.Icon, false, logger, outDir);
 			}
 		}
 

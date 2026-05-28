@@ -29,10 +29,9 @@ namespace SoulmaskDataMiner.Miners
 	/// <summary>
 	/// Mines data about natural gifts (talents)
 	/// </summary>
+	[MinerName("Gift")]
 	internal class NaturalGiftMiner : MinerBase
 	{
-		public override string Name => "Gift";
-
 		public override bool Run(IProviderManager providerManager, Config config, Logger logger, ISqlWriter sqlWriter)
 		{
 			if (!TryFindGifts(providerManager, config, logger, out IReadOnlyDictionary<ENaturalGiftSource, List<CombinedGiftData>>? combinedGifts))
@@ -218,7 +217,7 @@ namespace SoulmaskDataMiner.Miners
 					if (data.Icon is null) continue;
 					if (!seenTextures.Add(data.Icon!.Name)) continue;
 
-					TextureExporter.ExportTexture(data.Icon!, false, logger, outDir);
+					TextureExporter.ExportTexture(config,data.Icon!, false, logger, outDir);
 				}
 			}
 		}

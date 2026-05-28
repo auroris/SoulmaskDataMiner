@@ -29,10 +29,9 @@ namespace SoulmaskDataMiner.Miners
 	/// <summary>
 	/// Mines data about character proficiencies
 	/// </summary>
+	[MinerName("Proficiency")]
 	internal class ProficiencyMiner : MinerBase
 	{
-		public override string Name => "Proficiency";
-
 		public override bool Run(IProviderManager providerManager, Config config, Logger logger, ISqlWriter sqlWriter)
 		{
 			IEnumerable<ProficiencyData>? proficiencies;
@@ -181,7 +180,7 @@ namespace SoulmaskDataMiner.Miners
 			foreach (ProficiencyData proficiency in proficiencies)
 			{
 				if (proficiency.Icon is null) continue;
-				TextureExporter.ExportTexture(proficiency.Icon, false, logger, outDir);
+				TextureExporter.ExportTexture(config,proficiency.Icon, false, logger, outDir);
 			}
 		}
 	}

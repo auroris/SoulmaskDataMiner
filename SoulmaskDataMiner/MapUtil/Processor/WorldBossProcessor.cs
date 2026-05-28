@@ -93,7 +93,7 @@ namespace SoulmaskDataMiner.MapUtil.Processor
 
 					string? npcName = null;
 					List<FPackageIndex> growthComponentIndices = new();
-					GameClassHeirarchy.SearchInheritance(npcClass, (current =>
+					GameClassHierarchy.SearchInheritance(npcClass, (current =>
 					{
 						UObject? npcObj = current?.ClassDefaultObject.Load();
 						if (npcObj is null)
@@ -261,7 +261,7 @@ namespace SoulmaskDataMiner.MapUtil.Processor
 					string loot = "{}";
 					{
 						CollectionData? collectionData = null;
-						GameClassHeirarchy.SearchInheritance(npcClass, (current) =>
+						GameClassHierarchy.SearchInheritance(npcClass, (current) =>
 						{
 							if (poiDatabase.StaticData.Loot.CollectionMap.TryGetValue(current.Name, out CollectionData value))
 							{

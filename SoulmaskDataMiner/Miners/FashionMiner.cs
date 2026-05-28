@@ -24,10 +24,9 @@ using System.Text;
 
 namespace SoulmaskDataMiner.Miners
 {
+	[MinerName("Fashion")]
 	internal class FashionMiner : MinerBase
 	{
-		public override string Name => "Fashion";
-
 		public override bool Run(IProviderManager providerManager, Config config, Logger logger, ISqlWriter sqlWriter)
 		{
 			IEnumerable<CombinedFashionData> fashionData = GetFashionData(providerManager, logger);
@@ -236,7 +235,7 @@ namespace SoulmaskDataMiner.Miners
 			string outDir = Path.Combine(config.OutputDirectory, Name, "icons");
 			foreach (CombinedFashionData fashion in data)
 			{
-				TextureExporter.ExportTexture(fashion.Icon, false, logger, outDir);
+				TextureExporter.ExportTexture(config,fashion.Icon, false, logger, outDir);
 			}
 		}
 

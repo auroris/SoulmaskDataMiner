@@ -111,7 +111,7 @@ namespace SoulmaskDataMiner.MapUtil
 				foreach (var pair in foliageMap.Properties)
 				{
 					string name = pair.Key.GetValue<FPackageIndex>()!.Name;
-					if (!GameClassHeirarchy.Instance.FoliageComponentClasses.Contains(name))
+					if (!GameClassHierarchy.Instance.FoliageComponentClasses.Contains(name))
 					{
 						logger.Warning($"BP_ZhiBeiConfig references {name} which does not appear to be a foliage component type");
 						continue;
@@ -285,7 +285,7 @@ namespace SoulmaskDataMiner.MapUtil
 
 						string? resultName = null;
 						UTexture2D? resultIcon = null;
-						GameClassHeirarchy.SearchInheritance(itemObj, current =>
+						GameClassHierarchy.SearchInheritance(itemObj, current =>
 						{
 							UObject? itemObj = current.ClassDefaultObject.Load();
 							if (itemObj is null) return false;

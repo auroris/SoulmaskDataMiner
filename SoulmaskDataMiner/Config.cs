@@ -54,9 +54,16 @@ namespace SoulmaskDataMiner
 		public IReadOnlyList<ELanguage> Languages { get; set; }
 
 		/// <summary>
-		/// Whether to export textures
+		/// Whether to export textures (the user-supplied --no-textures flag inverts this)
 		/// </summary>
 		public bool ExportTextures { get; set; }
+
+		/// <summary>
+		/// Whether texture export should actually run during the current pass. Distinct from
+		/// <see cref="ExportTextures"/> because textures are only exported on the first
+		/// mined language even when several languages are requested.
+		/// </summary>
+		public bool IsTextureExportActive { get; set; }
 
 		private Config()
 		{
@@ -66,6 +73,7 @@ namespace SoulmaskDataMiner
 			Miners = null;
 			Languages = new List<ELanguage>() { ELanguage.English };
 			ExportTextures = true;
+			IsTextureExportActive = true;
 		}
 
 		public static bool TryParseCommandLine(string[] args, Logger logger, [NotNullWhen(true)] out Config? result)
@@ -182,7 +190,7 @@ namespace SoulmaskDataMiner
 										}
 										else
 										{
-											logger.Error($"Unrecognized language '{trimmed}'. Supported languages are: English, Chinese, Spanish, Russian, Japanese, Korean, French, German, pt.");
+											logger.Error($"Unrecognized language '{trimmed}'. Supported codes are: {SupportedLanguageCodesList}.");
 											result = null;
 											return false;
 										}
@@ -283,8 +291,8 @@ namespace SoulmaskDataMiner
 			logger.Log(logLevel, $"{indent}                    default miners will run.");
 			logger.LogEmptyLine(logLevel);
 			logger.Log(logLevel, $"{indent}  --lang [languages] Comma separated list of languages to mine (e.g. en,zh).");
-			logger.Log(logLevel, $"{indent}                     Specify 'all' to mine all 9 supported languages.");
-			logger.Log(logLevel, $"{indent}                     Supported: en, zh, es, ru, ja, ko, fr, de, pt.");
+			logger.Log(logLevel, $"{indent}                     Specify 'all' to mine all {sLanguages.Length} supported languages.");
+			logger.Log(logLevel, $"{indent}                     Supported: {SupportedLanguageCodesList}.");
 			logger.LogEmptyLine(logLevel);
 			logger.Log(logLevel, $"{indent}  --no-textures     Skip exporting textures/icons to speed up mining.");
 			logger.LogEmptyLine(logLevel);
@@ -295,30 +303,41 @@ namespace SoulmaskDataMiner
 			logger.Log(logLevel, $"{indent}  Additional: {string.Join(',', additionalMiners)}");
 		}
 
-		public static readonly IReadOnlyList<ELanguage> AllSupportedLanguages = new ELanguage[]
+		/// <summary>
+		/// Returns the short language code (e.g. "en") for a supported language.
+		/// </summary>
+		/// <exception cref="ArgumentOutOfRangeException">The language is not in the supported set.</exception>
+		public static string GetLanguageCode(ELanguage language)
 		{
-			ELanguage.English,
-			ELanguage.Chinese,
-			ELanguage.Spanish,
-			ELanguage.Russian,
-			ELanguage.Japanese,
-			ELanguage.Korean,
-			ELanguage.French,
-			ELanguage.German,
-			ELanguage.PortugueseBrazil
+			if (sLanguageToCode.TryGetValue(language, out string? code)) return code;
+			throw new ArgumentOutOfRangeException(nameof(language), language, $"Unsupported language: {language}");
+		}
+
+		// Single source of truth for the supported (language, code) pairs. Order here drives
+		// AllSupportedLanguages, the parse map, and the codes shown in PrintUsage.
+		private static readonly (ELanguage Lang, string Code)[] sLanguages = new[]
+		{
+			(ELanguage.English, "en"),
+			(ELanguage.Chinese, "zh"),
+			(ELanguage.Spanish, "es"),
+			(ELanguage.Russian, "ru"),
+			(ELanguage.Japanese, "ja"),
+			(ELanguage.Korean, "ko"),
+			(ELanguage.French, "fr"),
+			(ELanguage.German, "de"),
+			(ELanguage.PortugueseBrazil, "pt")
 		};
 
-		private static readonly Dictionary<string, ELanguage> sLanguageMap = new(StringComparer.OrdinalIgnoreCase)
-		{
-			{ "en", ELanguage.English },
-			{ "zh", ELanguage.Chinese },
-			{ "es", ELanguage.Spanish },
-			{ "ru", ELanguage.Russian },
-			{ "ja", ELanguage.Japanese },
-			{ "ko", ELanguage.Korean },
-			{ "fr", ELanguage.French },
-			{ "de", ELanguage.German },
-			{ "pt", ELanguage.PortugueseBrazil }
-		};
+		public static readonly IReadOnlyList<ELanguage> AllSupportedLanguages =
+			sLanguages.Select(l => l.Lang).ToArray();
+
+		private static readonly Dictionary<string, ELanguage> sLanguageMap =
+			sLanguages.ToDictionary(l => l.Code, l => l.Lang, StringComparer.OrdinalIgnoreCase);
+
+		private static readonly Dictionary<ELanguage, string> sLanguageToCode =
+			sLanguages.ToDictionary(l => l.Lang, l => l.Code);
+
+		private static string SupportedLanguageCodesList =>
+			string.Join(", ", sLanguages.Select(l => l.Code));
 	}
 }

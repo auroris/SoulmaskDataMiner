@@ -25,10 +25,9 @@ using System.Text;
 
 namespace SoulmaskDataMiner.Miners
 {
+	[MinerName("Recipe")]
 	internal class RecipeMiner : SubclassMinerBase
 	{
-		public override string Name => "Recipe";
-
 		protected override string NameProperty => "PeiFangName";
 
 		protected override string? DescriptionProperty => "TeShuPeiFangYiWen";
@@ -132,7 +131,7 @@ namespace SoulmaskDataMiner.Miners
 			{
 				foreach (RecipeInfo recipe in pair.Value)
 				{
-					TextureExporter.ExportTexture(recipe.Icon, false, logger, outDir);
+					TextureExporter.ExportTexture(config,recipe.Icon, false, logger, outDir);
 				}
 			}
 		}
@@ -144,7 +143,7 @@ namespace SoulmaskDataMiner.Miners
 			{
 				if (pair.Value.Icon is null) continue;
 
-				TextureExporter.ExportTexture(pair.Value.Icon, false, logger, outDir);
+				TextureExporter.ExportTexture(config,pair.Value.Icon, false, logger, outDir);
 			}
 		}
 

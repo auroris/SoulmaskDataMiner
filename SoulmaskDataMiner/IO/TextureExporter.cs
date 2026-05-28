@@ -21,45 +21,43 @@ using SoulmaskDataMiner.Data;
 namespace SoulmaskDataMiner.IO
 {
 	/// <summary>
-	/// Helper for exporting texture assets
+	/// Helper for exporting texture assets. Whether an export actually runs is gated by
+	/// <see cref="Config.IsTextureExportActive"/> — callers can invoke unconditionally.
 	/// </summary>
 	internal static class TextureExporter
 	{
 		/// <summary>
-		/// Whether to export textures
-		/// </summary>
-		public static bool Enabled { get; set; } = true;
-
-		/// <summary>
 		/// Export the first texture found within an asset's exports
 		/// </summary>
+		/// <param name="config">Used to determine whether texture export is currently active</param>
 		/// <param name="provider">The provider to load the asset from</param>
 		/// <param name="assetPath">The path to the asset</param>
 		/// <param name="includePath">True to append the asset's path to the output directory. False to output the file directly to the output directory.</param>
 		/// <param name="logger">For logging warnings and errors</param>
 		/// <param name="outDir">The directory to output the texture to</param>
 		/// <returns>True if the export succeeded, false on failure or if no texture was found</returns>
-		public static bool ExportFirstTexture(IFileProvider provider, string assetPath, bool includePath, Logger logger, string outDir)
+		public static bool ExportFirstTexture(Config config, IFileProvider provider, string assetPath, bool includePath, Logger logger, string outDir)
 		{
-			if (!Enabled) return true;
+			if (!config.IsTextureExportActive) return true;
 
 			UTexture2D? texture = DataUtil.LoadFirstTexture(provider, assetPath, logger);
 			if (texture is null) return false;
 
-			return ExportTexture(texture, includePath, logger, outDir);
+			return ExportTexture(config, texture, includePath, logger, outDir);
 		}
 
 		/// <summary>
 		/// Exports a texture asset to an image file
 		/// </summary>
+		/// <param name="config">Used to determine whether texture export is currently active</param>
 		/// <param name="texture">The texture to export</param>
 		/// <param name="includePath">True to append the asset's path to the output directory. False to output the file directly to the output directory.</param>
 		/// <param name="logger">For logging warnings and errors</param>
 		/// <param name="outDir">The directory to output the texture to</param>
 		/// <returns>True if the export succeeded, false on failure</returns>
-		public static bool ExportTexture(UTexture2D texture, bool includePath, Logger logger, string outDir)
+		public static bool ExportTexture(Config config, UTexture2D texture, bool includePath, Logger logger, string outDir)
 		{
-			if (!Enabled) return true;
+			if (!config.IsTextureExportActive) return true;
 
 			string outPath = Path.Combine(outDir, $"{(includePath ? ConvertAssetPath(texture.GetPathName()) : texture.Name)}.png");
 			try

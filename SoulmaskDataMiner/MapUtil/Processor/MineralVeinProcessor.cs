@@ -116,7 +116,7 @@ namespace SoulmaskDataMiner.MapUtil.Processor
 				UObject worldObj = mineralVeinObject.ExportObject.Value;
 				searchObj(worldObj);
 
-				GameClassHeirarchy.SearchInheritance((UClass)worldObj.Class!.Load()!, (current) =>
+				GameClassHierarchy.SearchInheritance((UClass)worldObj.Class!.Load()!, (current) =>
 				{
 					UObject? curObj = current.ClassDefaultObject.Load();
 					if (curObj is null) return false;

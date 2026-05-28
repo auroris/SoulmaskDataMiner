@@ -29,11 +29,9 @@ namespace SoulmaskDataMiner.Miners
 	/// <summary>
 	/// Mines data about character attributes
 	/// </summary>
-	[RequireClassData(true)]
+	[MinerName("Attribute"), RequireClassData(true)]
 	internal class AttributeMiner : MinerBase
 	{
-		public override string Name => "Attribute";
-
 		public override bool Run(IProviderManager providerManager, Config config, Logger logger, ISqlWriter sqlWriter)
 		{
 			IEnumerable<AttributeData>? attributes;
@@ -228,7 +226,7 @@ namespace SoulmaskDataMiner.Miners
 			foreach (AttributeData attr in attributes)
 			{
 				if (attr.Icon is null) continue;
-				TextureExporter.ExportTexture(attr.Icon, false, logger, outDir);
+				TextureExporter.ExportTexture(config,attr.Icon, false, logger, outDir);
 			}
 		}
 
