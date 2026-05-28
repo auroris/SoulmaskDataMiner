@@ -89,7 +89,7 @@ namespace SoulmaskDataMiner.IO
 				{
 					if (bitmap.BytesPerPixel != 4)
 					{
-						logger.Warning($"{texture.GetPathName()} - Skipping linear-to-sRGB conversion: unsupported pixel format {bitmap.ColorType} ({bitmap.BytesPerPixel} bpp).");
+						logger.Debug($"{texture.GetPathName()} - Skipping linear-to-sRGB conversion: unsupported pixel format {bitmap.ColorType} ({bitmap.BytesPerPixel} bpp).");
 					}
 					else
 					{

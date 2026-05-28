@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Crystal Ferrai
+// Copyright 2026 Crystal Ferrai
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -447,7 +447,7 @@ namespace SoulmaskDataMiner.MapUtil
 					}
 					else if (clanType != scgData.ClanType.Value)
 					{
-						if (scgData.HumanName?.Contains("Invader", StringComparison.OrdinalIgnoreCase) ?? false)
+						if (scgData.ClanType.Value == EClanType.CLAN_TYPE_INVADER || clanType == EClanType.CLAN_TYPE_INVADER)
 						{
 							clanType = EClanType.CLAN_TYPE_INVADER;
 						}
