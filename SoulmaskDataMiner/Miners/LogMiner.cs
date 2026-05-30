@@ -134,7 +134,7 @@ namespace SoulmaskDataMiner.Miners
 				return false;
 			}
 
-			IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> loc = providerManager.Provider.LocalizedResources;
+			IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> loc = providerManager.Provider.Internationalization;
 
 			bool success = true;
 			success &= WriteEnumLog(enumsPath, loc, config, logger, sqlWriter, "EJingYingRiZhiType", sWorkLogTable, ResolveWorkLog);
