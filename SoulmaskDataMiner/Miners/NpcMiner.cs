@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Crystal Ferrai
+// Copyright 2026 Crystal Ferrai
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ namespace SoulmaskDataMiner.Miners
 	/// <summary>
 	/// Gathers information about NPC classes
 	/// </summary>
-	[MinerName("Npc")]
+	[MinerName("Npc"), RequiredBaseClasses("HCharacterRen", "HCharacterDongWu")]
 	internal class NpcMiner : SubclassMinerBase
 	{
 		protected override string NameProperty => "MoRenMingZi";

@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Crystal Ferrai
+// Copyright 2026 Crystal Ferrai
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ namespace SoulmaskDataMiner.Miners
 	/// <summary>
 	/// Mines data about character attributes
 	/// </summary>
-	[MinerName("Attribute"), RequireClassData(true)]
+	[MinerName("Attribute"), RequireClassData(true), RequiredBaseClasses("HSuperCommonSet", "HSuperStateSet", "HBuWeiShangHaiAttriSet")]
 	internal class AttributeMiner : MinerBase
 	{
 		// Schema

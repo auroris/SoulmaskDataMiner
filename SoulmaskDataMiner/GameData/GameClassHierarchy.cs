@@ -107,7 +107,16 @@ namespace SoulmaskDataMiner.GameData
 						{
 							if (!classInfo.SuperName!.Equals(export.SuperIndex.Name))
 							{
-								logger.Warning($"Class {export.ObjectName.Text} found multiple times with different super classes");
+								if (classInfo.SuperName.EndsWith("_C") && export.SuperIndex.Name.EndsWith("_C"))
+								{
+									logger.Warning($"Class {export.ObjectName.Text} found multiple times with different blueprint super classes. Existing: {classInfo.SuperName}, New: {export.SuperIndex.Name} in package {package.Name} (file: {file.Path})");
+								}
+								classInfo.SuperName = export.SuperIndex.Name;
+								if (classInfo.Export is null)
+								{
+									classInfo.Export = export;
+								}
+								superMap[export.ObjectName.Text] = classInfo;
 							}
 							else if (classInfo.Export is null)
 							{

@@ -19,6 +19,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SoulmaskDataMiner.GameData;
 using System.Diagnostics;
+using System.Reflection;
 
 namespace SoulmaskDataMiner
 {
@@ -210,6 +211,71 @@ namespace SoulmaskDataMiner
 			{
 				logger.Error($"Failed to load class metadata. [{ex.GetType().FullName}] {ex.Message}");
 				return null;
+			}
+		}
+
+		/// <summary>
+		/// Safe-checks that all Unreal Engine expected base classes required by the active miners
+		/// are present in the class metadata dump. Prints warnings if expected classes are missing.
+		/// </summary>
+		public void ValidateSchema(Config config, Logger logger)
+		{
+			if (mClassMetadata is null) return;
+
+			HashSet<string>? includeMiners = config.Miners == null ? null : new HashSet<string>(config.Miners.Select(m => m.ToLowerInvariant()));
+			bool forceInclude = includeMiners?.Contains("all") ?? false;
+
+			HashSet<string> expectedBaseClasses = new();
+
+			Type minerInterface = typeof(IDataMiner);
+			foreach (Type type in typeof(SharedMiningContext).Assembly.GetTypes())
+			{
+				if (!type.IsAbstract && minerInterface.IsAssignableFrom(type))
+				{
+					MinerNameAttribute? nameAttr = type.GetCustomAttribute<MinerNameAttribute>();
+					if (nameAttr is null) continue;
+
+					string nameLower = nameAttr.Name.ToLowerInvariant();
+					if (includeMiners == null)
+					{
+						DefaultEnabledAttribute? defaultEnabledAttr = type.GetCustomAttribute<DefaultEnabledAttribute>();
+						bool isDefault = defaultEnabledAttr?.IsEnabled ?? true;
+						if (!isDefault) continue;
+					}
+					else if (!forceInclude && !includeMiners.Contains(nameLower))
+					{
+						continue;
+					}
+
+					RequiredBaseClassesAttribute? requiredAttr = type.GetCustomAttribute<RequiredBaseClassesAttribute>();
+					if (requiredAttr is not null)
+					{
+						foreach (string baseClass in requiredAttr.BaseClassNames)
+						{
+							expectedBaseClasses.Add(baseClass);
+						}
+					}
+				}
+			}
+
+			if (expectedBaseClasses.Count == 0) return;
+
+			List<string> missingClasses = new();
+			foreach (string baseClass in expectedBaseClasses)
+			{
+				if (!mClassMetadata.ContainsKey(baseClass))
+				{
+					missingClasses.Add(baseClass);
+				}
+			}
+
+			if (missingClasses.Count > 0)
+			{
+				logger.Warning($"[Schema Validation] The following base classes are missing from class metadata: {string.Join(", ", missingClasses)}. Active miners relying on these classes will likely fail or skip all data records. Check that your ClassesInfo.json is generated from the correct game version.");
+			}
+			else
+			{
+				logger.Information("[Schema Validation] All expected base classes are verified in the class metadata.");
 			}
 		}
 	}

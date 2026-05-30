@@ -51,6 +51,8 @@ namespace SoulmaskDataMiner
 				return OnExit(1);
 			}
 
+			shared.ValidateSchema(config, logger);
+
 			// Inspect which capabilities the active miner set needs and load them once.
 			(bool needHierarchy, bool needLoot) = MineRunner.DetermineCapabilities(config, shared.ClassMetadata is not null);
 			if (needHierarchy)

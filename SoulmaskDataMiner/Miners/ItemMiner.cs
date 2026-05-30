@@ -24,7 +24,7 @@ namespace SoulmaskDataMiner.Miners
 	/// <summary>
 	/// Gathers information about item classes
 	/// </summary>
-	[MinerName("Item")]
+	[MinerName("Item"), RequiredBaseClasses("HDaoJuBase")]
 	internal class ItemMiner : SubclassMinerBase
 	{
 		protected override string NameProperty => "Name";

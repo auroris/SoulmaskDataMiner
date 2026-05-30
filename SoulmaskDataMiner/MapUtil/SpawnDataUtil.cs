@@ -453,7 +453,7 @@ namespace SoulmaskDataMiner.MapUtil
 						}
 						else
 						{
-							logger.Warning("Spawn data contains multiple clan types. Only the first type will be recorded.");
+							logger.Debug($"Spawn data for '{spawnerNameForLogging ?? "unknown"}' contains multiple clan types: {clanType} and {scgData.ClanType.Value}. Using the first type: {clanType}.");
 						}
 					}
 				}

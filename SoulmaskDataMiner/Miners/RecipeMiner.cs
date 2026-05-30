@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Crystal Ferrai
+// Copyright 2026 Crystal Ferrai
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ using System.Text;
 
 namespace SoulmaskDataMiner.Miners
 {
-	[MinerName("Recipe")]
+	[MinerName("Recipe"), RequiredBaseClasses("HPeiFangBase")]
 	internal class RecipeMiner : SubclassMinerBase
 	{
 		protected override string NameProperty => "PeiFangName";

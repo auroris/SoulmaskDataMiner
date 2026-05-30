@@ -20,7 +20,7 @@ namespace SoulmaskDataMiner.Miners
 	/// Gathers information about building (JianZhu) classes, providing a
 	/// class-name to display-name lookup for downstream tooling.
 	/// </summary>
-	[MinerName("Building")]
+	[MinerName("Building"), RequiredBaseClasses("HJianZhuBase")]
 	internal class BuildingMiner : SubclassMinerBase
 	{
 		protected override string NameProperty => "JianZhuDisplayName";

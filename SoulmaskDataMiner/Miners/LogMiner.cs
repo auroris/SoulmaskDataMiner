@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SoulmaskDataMiner.IO;
 
@@ -231,7 +232,10 @@ namespace SoulmaskDataMiner.Miners
 
 				try
 				{
-					JObject root = JObject.Parse(File.ReadAllText(enumsPath));
+					using FileStream file = File.OpenRead(enumsPath);
+					using StreamReader sr = new(file);
+					using JsonReader reader = new JsonTextReader(sr);
+					JObject root = JObject.Load(reader);
 					JArray data = (JArray)root["data"]!;
 					foreach (JObject entry in data)
 					{

@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Crystal Ferrai
+// Copyright 2026 Crystal Ferrai
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -354,9 +354,7 @@ namespace SoulmaskDataMiner.GameData
 
 						for (int i = 0; i < entry.Items.Count; ++i)
 						{
-							LootItem item = entry.Items[i];
-							item.Weight = (int)((float)item.Weight / totalWeight * 100.0f);
-							entry.Items[i] = item;
+							entry.Items[i] = entry.Items[i] with { Weight = (int)((float)entry.Items[i].Weight / totalWeight * 100.0f) };
 						}
 
 						content.BaseEntries.Add(entry);
@@ -652,8 +650,7 @@ namespace SoulmaskDataMiner.GameData
 				extraEntry.Table.Resolve(logger);
 				foreach (LootEntry entry in extraEntry.Table.AllEntries)
 				{
-					LootEntry copy = entry;
-					copy.Probability = (int)(copy.Probability * (extraEntry.Probability / 100.0f));
+					LootEntry copy = entry with { Probability = (int)(entry.Probability * (extraEntry.Probability / 100.0f)) };
 					AllEntries.Add(copy);
 				}
 			}
@@ -670,35 +667,20 @@ namespace SoulmaskDataMiner.GameData
 	/// <summary>
 	/// An entry in a loot table
 	/// </summary>
-	internal struct LootEntry
+	internal record LootEntry
 	{
-		public int Probability;
-		public List<LootItem> Items;
+		public int Probability { get; set; }
+		public List<LootItem> Items { get; init; } = new();
 
-		public int? AreaCondition;
-		public int? ClanCondition;
-		public bool CraftsmanOnly;
-		public List<string> AllowedMaps;
-		public int? ModeMask;
-		public int? NotModeMask;
-		public bool PvpOnly;
-		public int? PvpDayCondition;
-		public bool UnknownCondition;
-
-		public LootEntry()
-		{
-			Probability = 0;
-			Items = new();
-			AreaCondition = null;
-			ClanCondition = null;
-			CraftsmanOnly = false;
-			AllowedMaps = new();
-			ModeMask = null;
-			NotModeMask = null;
-			PvpOnly = false;
-			PvpDayCondition = null;
-			UnknownCondition = false;
-		}
+		public int? AreaCondition { get; set; }
+		public int? ClanCondition { get; set; }
+		public bool CraftsmanOnly { get; set; }
+		public List<string> AllowedMaps { get; init; } = new();
+		public int? ModeMask { get; set; }
+		public int? NotModeMask { get; set; }
+		public bool PvpOnly { get; set; }
+		public int? PvpDayCondition { get; set; }
+		public bool UnknownCondition { get; set; }
 
 		public string? GetConditionsJson()
 		{
@@ -730,12 +712,12 @@ namespace SoulmaskDataMiner.GameData
 	/// <summary>
 	/// An item in a loot entry
 	/// </summary>
-	internal struct LootItem
+	internal record struct LootItem
 	{
-		public int Weight;
-		public TRange<float> Amount;
-		public EDaoJuPinZhi Quality;
-		public FPackageIndex Asset;
+		public int Weight { get; set; }
+		public TRange<float> Amount { get; set; }
+		public EDaoJuPinZhi Quality { get; set; }
+		public FPackageIndex Asset { get; set; }
 
 		public LootItem()
 		{
