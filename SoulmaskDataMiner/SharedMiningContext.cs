@@ -222,39 +222,12 @@ namespace SoulmaskDataMiner
 		{
 			if (mClassMetadata is null) return;
 
-			HashSet<string>? includeMiners = config.Miners == null ? null : new HashSet<string>(config.Miners.Select(m => m.ToLowerInvariant()));
-			bool forceInclude = includeMiners?.Contains("all") ?? false;
-
 			HashSet<string> expectedBaseClasses = new();
-
-			Type minerInterface = typeof(IDataMiner);
-			foreach (Type type in typeof(SharedMiningContext).Assembly.GetTypes())
+			foreach (MineRunner.MinerDescriptor desc in MineRunner.GetActiveMinerDescriptors(config, classMetadataLoaded: true))
 			{
-				if (!type.IsAbstract && minerInterface.IsAssignableFrom(type))
+				foreach (string baseClass in desc.RequiredBaseClasses)
 				{
-					MinerNameAttribute? nameAttr = type.GetCustomAttribute<MinerNameAttribute>();
-					if (nameAttr is null) continue;
-
-					string nameLower = nameAttr.Name.ToLowerInvariant();
-					if (includeMiners == null)
-					{
-						DefaultEnabledAttribute? defaultEnabledAttr = type.GetCustomAttribute<DefaultEnabledAttribute>();
-						bool isDefault = defaultEnabledAttr?.IsEnabled ?? true;
-						if (!isDefault) continue;
-					}
-					else if (!forceInclude && !includeMiners.Contains(nameLower))
-					{
-						continue;
-					}
-
-					RequiredBaseClassesAttribute? requiredAttr = type.GetCustomAttribute<RequiredBaseClassesAttribute>();
-					if (requiredAttr is not null)
-					{
-						foreach (string baseClass in requiredAttr.BaseClassNames)
-						{
-							expectedBaseClasses.Add(baseClass);
-						}
-					}
+					expectedBaseClasses.Add(baseClass);
 				}
 			}
 

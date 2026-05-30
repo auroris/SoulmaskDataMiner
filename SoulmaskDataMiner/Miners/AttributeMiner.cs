@@ -22,6 +22,7 @@ using SoulmaskDataMiner.Data;
 using SoulmaskDataMiner.GameData;
 using SoulmaskDataMiner.IO;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 
 namespace SoulmaskDataMiner.Miners
 {
@@ -69,12 +70,11 @@ namespace SoulmaskDataMiner.Miners
 
 		private bool FindAttributeClasses(IProviderManager providerManager, Logger logger, [NotNullWhen(true)] out IEnumerable<AttributeData>? attributes)
 		{
-			string[] classNames = new string[]
-			{
-				"HSuperCommonSet",
-				"HSuperStateSet",
-				"HBuWeiShangHaiAttriSet"
-			};
+			// Read the class list from the [RequiredBaseClasses] attribute on this type so the
+			// declaration on the class is the single source of truth (also used by
+			// SharedMiningContext.ValidateSchema to check the dump up front).
+			string[] classNames = GetType().GetCustomAttribute<RequiredBaseClassesAttribute>()?.BaseClassNames
+				?? Array.Empty<string>();
 
 			List<AttributeData> attrList = new();
 

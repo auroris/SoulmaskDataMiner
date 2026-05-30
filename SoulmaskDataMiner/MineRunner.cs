@@ -101,7 +101,7 @@ namespace SoulmaskDataMiner
 					}
 					catch (Exception ex)
 					{
-						mLogger.Log(LogLevel.Error, $"Data miner [{miner.Name}] failed! [{ex.GetType().FullName}] {ex.Message}");
+						mLogger.Log(LogLevel.Error, $"Data miner [{miner.Name}] failed! [{ex.GetType().FullName}] {ex.Message}\n{ex.StackTrace}");
 					}
 				}
 
@@ -171,53 +171,35 @@ namespace SoulmaskDataMiner
 		/// </summary>
 		public static (bool NeedHierarchy, bool NeedLootDatabase) DetermineCapabilities(Config config, bool classMetadataLoaded)
 		{
-			HashSet<string>? includeMiners = config.Miners == null ? null : new HashSet<string>(config.Miners.Select(m => m.ToLowerInvariant()));
-			bool forceInclude = includeMiners?.Contains("all") ?? false;
-
 			bool needHierarchy = false;
 			bool needLoot = false;
-
-			foreach (MinerDescriptor desc in GetMinerDescriptors())
+			foreach (MinerDescriptor desc in GetActiveMinerDescriptors(config, classMetadataLoaded))
 			{
-				if (includeMiners == null && !desc.IsDefault) continue;
-
-				string nameLower = desc.Name.ToLowerInvariant();
-
-				if (desc.RequireClassData && !classMetadataLoaded) continue;
-				if (!forceInclude && !(includeMiners?.Contains(nameLower) ?? true)) continue;
-
 				needHierarchy |= desc.RequireHierarchy;
 				needLoot |= desc.RequireLootDatabase;
 			}
-
 			return (needHierarchy, needLoot);
 		}
 
 		private void CreateMiners(IEnumerable<string>? minersToInclude)
 		{
-			HashSet<string>? includeMiners = minersToInclude == null ? null : new HashSet<string>(minersToInclude.Select(m => m.ToLowerInvariant()));
-			bool forceInclude = includeMiners?.Contains("all") ?? false;
+			(HashSet<string>? includeMiners, bool forceInclude) = ParseMinerFilter(minersToInclude);
+			bool classMetadataLoaded = mProviderManager.ClassMetadata is not null;
 
 			List<string> skippedRunOnce = new();
 
 			foreach (MinerDescriptor desc in GetMinerDescriptors())
 			{
-				if (includeMiners == null && !desc.IsDefault)
-				{
-					continue;
-				}
+				if (!IsInFilter(desc, includeMiners, forceInclude)) continue;
 
 				string nameLower = desc.Name.ToLowerInvariant();
 
-				if (desc.RequireClassData && mProviderManager.ClassMetadata is null)
+				// Warn only for miners the user actually asked to run — silently
+				// skip class-data-gated miners that wouldn't have run anyway.
+				if (desc.RequireClassData && !classMetadataLoaded)
 				{
 					mLogger.Warning($"Skipping miner \"{desc.Name}\" because class metadata has not been loaded. Use the --classes parameter to specify a class metadata file to load.");
 					includeMiners?.Remove(nameLower);
-					continue;
-				}
-
-				if (!forceInclude && !(includeMiners?.Contains(nameLower) ?? true))
-				{
 					continue;
 				}
 
@@ -268,20 +250,21 @@ namespace SoulmaskDataMiner
 			}
 		}
 
-		private readonly record struct MinerDescriptor(
+		internal readonly record struct MinerDescriptor(
 			Type Type,
 			string Name,
 			bool IsDefault,
 			bool RequireHierarchy,
 			bool RequireClassData,
 			bool RequireLootDatabase,
-			bool RunOncePerProcess);
+			bool RunOncePerProcess,
+			IReadOnlyList<string> RequiredBaseClasses);
 
 		private static IReadOnlyList<MinerDescriptor>? sMinerDescriptors;
 
 		// Single assembly scan; cached for the process lifetime. Reads names from MinerNameAttribute
 		// so callers don't need to instantiate a miner just to learn its name.
-		private static IReadOnlyList<MinerDescriptor> GetMinerDescriptors()
+		internal static IReadOnlyList<MinerDescriptor> GetMinerDescriptors()
 		{
 			if (sMinerDescriptors is not null) return sMinerDescriptors;
 
@@ -299,12 +282,56 @@ namespace SoulmaskDataMiner
 				bool requireClassData = type.GetCustomAttribute<RequireClassDataAttribute>()?.IsRequired ?? false;
 				bool requireLootDatabase = type.GetCustomAttribute<RequireLootDatabaseAttribute>()?.IsRequired ?? false;
 				bool runOncePerProcess = type.GetCustomAttribute<RunOncePerProcessAttribute>() is not null;
+				IReadOnlyList<string> requiredBaseClasses = type.GetCustomAttribute<RequiredBaseClassesAttribute>()?.BaseClassNames
+					?? Array.Empty<string>();
 
-				result.Add(new MinerDescriptor(type, name, isDefault, requireHierarchy, requireClassData, requireLootDatabase, runOncePerProcess));
+				result.Add(new MinerDescriptor(type, name, isDefault, requireHierarchy, requireClassData, requireLootDatabase, runOncePerProcess, requiredBaseClasses));
 			}
 
 			sMinerDescriptors = result;
 			return result;
+		}
+
+		/// <summary>
+		/// Parses the user-supplied <c>--miners</c> filter into a normalized set
+		/// plus a <c>forceInclude</c> flag (true if "all" was specified). Returns
+		/// (null, false) when no filter is configured (default-enabled miners only).
+		/// </summary>
+		internal static (HashSet<string>? Includes, bool ForceInclude) ParseMinerFilter(IEnumerable<string>? minersToInclude)
+		{
+			if (minersToInclude is null) return (null, false);
+			HashSet<string> set = new(minersToInclude.Select(m => m.ToLowerInvariant()));
+			return (set, set.Contains("all"));
+		}
+
+		/// <summary>
+		/// True if <paramref name="desc"/> is in the active set under the given
+		/// filter. Does not consider capability gates (class data, hierarchy) —
+		/// callers layer those on top.
+		/// </summary>
+		internal static bool IsInFilter(MinerDescriptor desc, HashSet<string>? includes, bool forceInclude)
+		{
+			if (includes is null) return desc.IsDefault;
+			if (forceInclude) return true;
+			return includes.Contains(desc.Name.ToLowerInvariant());
+		}
+
+		/// <summary>
+		/// Returns the miners that will actually run under the given <paramref name="config"/>:
+		/// in the user's filter (or default-enabled when no filter), and not gated
+		/// out by missing class metadata. Locale-independent — used by
+		/// <see cref="DetermineCapabilities"/> and <see cref="SharedMiningContext.ValidateSchema"/>
+		/// before any per-language work begins.
+		/// </summary>
+		internal static IEnumerable<MinerDescriptor> GetActiveMinerDescriptors(Config config, bool classMetadataLoaded)
+		{
+			(HashSet<string>? includes, bool forceInclude) = ParseMinerFilter(config.Miners);
+			foreach (MinerDescriptor desc in GetMinerDescriptors())
+			{
+				if (!IsInFilter(desc, includes, forceInclude)) continue;
+				if (desc.RequireClassData && !classMetadataLoaded) continue;
+				yield return desc;
+			}
 		}
 	}
 }
