@@ -96,7 +96,7 @@ namespace SoulmaskDataMiner.Miners
 				}
 			}
 
-			WriteBabies(allBabies, config, logger);
+			WriteBabies(allBabies, config, logger, sqlWriter);
 			WriteEventsCsv(eventsPerMap, config, logger);
 
 			WriteSql(allMapData, sqlWriter, logger);
@@ -466,17 +466,18 @@ namespace SoulmaskDataMiner.Miners
 			sqlWriter.WriteEndTable();
 		}
 
-		private void WriteBabies(IReadOnlySet<NpcData> babies, Config config, Logger logger)
-		{
-			string outPath = Path.Combine(config.OutputDirectory, Name, "babies.csv");
-			using FileStream outFile = IOUtil.CreateFile(outPath, logger);
-			using StreamWriter writer = new(outFile, Encoding.UTF8);
+		private static readonly MinerTable<NpcData> sBabiesTable = new(
+			csvFileName: "babies.csv",
+			sqlTableName: null,
+			columns:
+			[
+				TableColumn.Str<NpcData>("class", b => b.CharacterClass.Owner!.Name),
+				TableColumn.Str<NpcData>("name", b => b.Name),
+			]);
 
-			writer.WriteLine("class,name");
-			foreach (NpcData baby in babies)
-			{
-				writer.WriteLine($"{CsvStr(baby.CharacterClass.Owner!.Name)},{CsvStr(baby.Name)}");
-			}
+		private void WriteBabies(IReadOnlySet<NpcData> babies, Config config, Logger logger, ISqlWriter sqlWriter)
+		{
+			WriteTable(babies, sBabiesTable, config, logger, sqlWriter);
 		}
 
 		private void WriteEventsCsv(IReadOnlyDictionary<string, IReadOnlyDictionary<int, EventData>> eventsPerMap, Config config, Logger logger)
@@ -498,33 +499,39 @@ namespace SoulmaskDataMiner.Miners
 			}
 		}
 
+		// Row type for the aggregated event SQL table (one row per event per map).
+		private readonly record struct EventRow(string Map, int Id, EventData Event);
+
+		// Schema
+		// create table `event` (
+		//   `map` varchar(63) not null,
+		//   `id` int not null,
+		//   `modes` tinyint unsigned not null,
+		//   `names` varchar(63) not null,
+		//   `npcs` varchar(1023) not null
+		// )
+		private static readonly IReadOnlyList<TableColumn<EventRow>> sEventColumns =
+		[
+			TableColumn.Str<EventRow>("map", r => r.Map),
+			TableColumn.Int<EventRow>("id", r => r.Id),
+			TableColumn.Int<EventRow>("modes", r => r.Event.ModeMask),
+			TableColumn.Str<EventRow>("names", r => $"[\"{string.Join("\",\"", r.Event.Names)}\"]"),
+			TableColumn.Str<EventRow>("npcs", r => FormatNpcNamesJson(r.Event.SpawnData)),
+		];
+
 		private void WriteEventSql(IReadOnlyDictionary<string, IReadOnlyDictionary<int, EventData>> eventsPerMap, ISqlWriter sqlWriter, Logger logger)
 		{
-			// Schema
-			// create table `event` (
-			//   `map` varchar(63) not null,
-			//   `id` int not null,
-			//   `modes` tinyint unsigned not null,
-			//   `names` varchar(63) not null,
-			//   `npcs` varchar(1023) not null
-			// )
+			IEnumerable<EventRow> rows = eventsPerMap
+				.OrderBy(p => p.Key)
+				.SelectMany(mp => mp.Value.OrderBy(ep => ep.Key)
+					.Select(ep => new EventRow(mp.Key, ep.Key, ep.Value)));
+			WriteSqlTable(rows, sEventColumns, "event", sqlWriter);
+		}
 
-			sqlWriter.WriteStartTable("event");
-
-			foreach (var mapPair in eventsPerMap.OrderBy(p => p.Key))
-			{
-				foreach (var eventPair in mapPair.Value.OrderBy(p => p.Key))
-				{
-					string eventNamesString = $"[\"{string.Join("\",\"", eventPair.Value.Names)}\"]";
-
-					IEnumerable<string> npcNames = new HashSet<string>(eventPair.Value.SpawnData.SelectMany(sd => sd.NpcNames));
-					string npcNamesString = npcNames.Any() ? $"[\"{string.Join("\",\"", npcNames)}\"]" : "[]";
-
-					sqlWriter.WriteRow($"{DbStr(mapPair.Key)}, {eventPair.Key}, {eventPair.Value.ModeMask}, {DbStr(eventNamesString)}, {DbStr(npcNamesString)}");
-				}
-			}
-
-			sqlWriter.WriteEndTable();
+		private static string FormatNpcNamesJson(IEnumerable<SpawnData> spawnData)
+		{
+			IEnumerable<string> npcNames = new HashSet<string>(spawnData.SelectMany(sd => sd.NpcNames));
+			return npcNames.Any() ? $"[\"{string.Join("\",\"", npcNames)}\"]" : "[]";
 		}
 
 		private class MapInfo

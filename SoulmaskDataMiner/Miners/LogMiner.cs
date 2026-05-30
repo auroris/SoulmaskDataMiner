@@ -14,7 +14,6 @@
 
 using Newtonsoft.Json.Linq;
 using SoulmaskDataMiner.IO;
-using System.Text;
 
 namespace SoulmaskDataMiner.Miners
 {
@@ -91,6 +90,41 @@ namespace SoulmaskDataMiner.Miners
 		private static readonly object sEnumCacheLock = new();
 		private static Dictionary<string, IReadOnlyDictionary<int, string>>? sEnumCache;
 
+		// Row type for the two enum-driven log tables (WorkLog, ClanLog).
+		private readonly record struct EnumLogRow(int Id, string Member, string Name);
+
+		// Row type for the Reason table (keyed by truncated FText key).
+		private readonly record struct ReasonRow(string Key, string Name);
+
+		private static readonly MinerTable<EnumLogRow> sWorkLogTable = new(
+			csvFileName: "WorkLog.csv",
+			sqlTableName: null,
+			columns:
+			[
+				TableColumn.Int<EnumLogRow>("id", r => r.Id),
+				TableColumn.Str<EnumLogRow>("member", r => r.Member),
+				TableColumn.Str<EnumLogRow>("name", r => r.Name),
+			]);
+
+		private static readonly MinerTable<EnumLogRow> sClanLogTable = new(
+			csvFileName: "ClanLog.csv",
+			sqlTableName: null,
+			columns:
+			[
+				TableColumn.Int<EnumLogRow>("id", r => r.Id),
+				TableColumn.Str<EnumLogRow>("member", r => r.Member),
+				TableColumn.Str<EnumLogRow>("name", r => r.Name),
+			]);
+
+		private static readonly MinerTable<ReasonRow> sReasonTable = new(
+			csvFileName: "Reason.csv",
+			sqlTableName: null,
+			columns:
+			[
+				TableColumn.Str<ReasonRow>("key", r => r.Key),
+				TableColumn.Str<ReasonRow>("name", r => r.Name),
+			]);
+
 		public override bool Run(IProviderManager providerManager, Config config, Logger logger, ISqlWriter sqlWriter)
 		{
 			string? enumsPath = GetEnumsInfoPath(config);
@@ -103,9 +137,9 @@ namespace SoulmaskDataMiner.Miners
 			IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> loc = providerManager.Provider.LocalizedResources;
 
 			bool success = true;
-			success &= WriteEnumLog(enumsPath, loc, config, logger, "EJingYingRiZhiType", "WorkLog.csv", ResolveWorkLog);
-			success &= WriteEnumLog(enumsPath, loc, config, logger, "EGongHuiRiZhi", "ClanLog.csv", ResolveClanLog);
-			success &= WriteReasons(loc, config, logger);
+			success &= WriteEnumLog(enumsPath, loc, config, logger, sqlWriter, "EJingYingRiZhiType", sWorkLogTable, ResolveWorkLog);
+			success &= WriteEnumLog(enumsPath, loc, config, logger, sqlWriter, "EGongHuiRiZhi", sClanLogTable, ResolveClanLog);
+			success &= WriteReasons(loc, config, logger, sqlWriter);
 			return success;
 		}
 
@@ -124,18 +158,13 @@ namespace SoulmaskDataMiner.Miners
 			return Get(loc, ClanLogNamespace, $"GongHuiRiZhiTxt {member}");
 		}
 
-		private bool WriteEnumLog(string enumsPath, IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> loc, Config config, Logger logger, string enumName, string fileName, ResolveText resolve)
+		private bool WriteEnumLog(string enumsPath, IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> loc, Config config, Logger logger, ISqlWriter sqlWriter, string enumName, MinerTable<EnumLogRow> table, ResolveText resolve)
 		{
 			IReadOnlyDictionary<int, string>? members = LoadEnumMembers(enumsPath, enumName, logger);
 			if (members is null) return false;
 
-			string outPath = Path.Combine(config.OutputDirectory, Name, fileName);
-			using FileStream stream = IOUtil.CreateFile(outPath, logger);
-			using StreamWriter writer = new(stream, Encoding.UTF8);
-
-			writer.WriteLine("id,member,name");
-
-			int written = 0, skipped = 0;
+			List<EnumLogRow> rows = new();
+			int skipped = 0;
 			foreach (KeyValuePair<int, string> entry in members.OrderBy(kv => kv.Key))
 			{
 				if (IsSentinel(entry.Value)) continue;
@@ -143,15 +172,15 @@ namespace SoulmaskDataMiner.Miners
 				string? text = resolve(loc, entry.Key, entry.Value);
 				if (string.IsNullOrEmpty(text)) { ++skipped; continue; }
 
-				writer.WriteLine($"{entry.Key},{CsvStr(entry.Value)},{CsvStr(text)}");
-				++written;
+				rows.Add(new EnumLogRow(entry.Key, entry.Value, text));
 			}
 
-			logger.Information($"[Log] {fileName}: wrote {written} entries" + (skipped > 0 ? $", {skipped} had no string" : "."));
+			WriteTable(rows, table, config, logger, sqlWriter);
+			logger.Information($"[Log] {table.CsvFileName}: wrote {rows.Count} entries" + (skipped > 0 ? $", {skipped} had no string" : "."));
 			return true;
 		}
 
-		private bool WriteReasons(IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> loc, Config config, Logger logger)
+		private bool WriteReasons(IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> loc, Config config, Logger logger, ISqlWriter sqlWriter)
 		{
 			if (!loc.TryGetValue(ReasonNamespace, out IReadOnlyDictionary<string, string>? ws))
 			{
@@ -159,22 +188,16 @@ namespace SoulmaskDataMiner.Miners
 				return true;
 			}
 
-			string outPath = Path.Combine(config.OutputDirectory, Name, "Reason.csv");
-			using FileStream stream = IOUtil.CreateFile(outPath, logger);
-			using StreamWriter writer = new(stream, Encoding.UTF8);
-
-			writer.WriteLine("key,name");
-
-			int written = 0;
+			List<ReasonRow> rows = new();
 			foreach (KeyValuePair<string, string> pair in ws.Where(kv => kv.Key.StartsWith(ReasonKeyPrefix)).OrderBy(kv => kv.Key))
 			{
 				if (string.IsNullOrEmpty(pair.Value)) continue;
 				string member = pair.Key.Substring(ReasonKeyPrefix.Length);
-				writer.WriteLine($"{CsvStr(member)},{CsvStr(pair.Value)}");
-				++written;
+				rows.Add(new ReasonRow(member, pair.Value));
 			}
 
-			logger.Information($"[Log] Reason.csv: wrote {written} entries.");
+			WriteTable(rows, sReasonTable, config, logger, sqlWriter);
+			logger.Information($"[Log] Reason.csv: wrote {rows.Count} entries.");
 			return true;
 		}
 

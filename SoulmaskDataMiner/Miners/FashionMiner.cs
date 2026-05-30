@@ -20,13 +20,34 @@ using CUE4Parse.UE4.Assets.Objects;
 using SoulmaskDataMiner.Data;
 using SoulmaskDataMiner.GameData;
 using SoulmaskDataMiner.IO;
-using System.Text;
 
 namespace SoulmaskDataMiner.Miners
 {
 	[MinerName("Fashion")]
 	internal class FashionMiner : MinerBase
 	{
+		// Schema
+		// create table `fashion` (
+		//   `name` varchar(63) not null,
+		//   `desc` varchar(127),
+		//   `id_m` int not null,
+		//   `id_f` int not null,
+		//   `icon` varchar(127) not null,
+		//   primary key (`name`)
+		// )
+		private static readonly MinerTable<CombinedFashionData> sTable = new(
+			csvFileName: "Fashion.csv",
+			sqlTableName: "fashion",
+			columns:
+			[
+				TableColumn.Str<CombinedFashionData>("name", f => f.Name),
+				TableColumn.Str<CombinedFashionData>("desc", f => f.Desc),
+				TableColumn.Int<CombinedFashionData>("id_m", f => f.MaleId),
+				TableColumn.Int<CombinedFashionData>("id_f", f => f.FemaleId),
+				TableColumn.Str<CombinedFashionData>("icon", f => f.Icon.Name),
+			],
+			iconSelector: f => f.Icon);
+
 		public override bool Run(IProviderManager providerManager, Config config, Logger logger, ISqlWriter sqlWriter)
 		{
 			IEnumerable<CombinedFashionData> fashionData = GetFashionData(providerManager, logger);
@@ -36,10 +57,7 @@ namespace SoulmaskDataMiner.Miners
 				return false;
 			}
 
-			WriteCsv(fashionData, config, logger);
-			WriteSql(fashionData, sqlWriter, logger);
-			WriteTextures(fashionData, config, logger);
-
+			WriteTable(fashionData, sTable, config, logger, sqlWriter);
 			return true;
 		}
 
@@ -194,49 +212,6 @@ namespace SoulmaskDataMiner.Miners
 			fashionList.Sort();
 
 			return fashionList;
-		}
-
-		private void WriteCsv(IEnumerable<CombinedFashionData> data, Config config, Logger logger)
-		{
-			string outPath = Path.Combine(config.OutputDirectory, Name, $"{Name}.csv");
-			using FileStream stream = IOUtil.CreateFile(outPath, logger);
-			using StreamWriter writer = new(stream, Encoding.UTF8);
-
-			writer.WriteLine("name,desc,id_m,id_f,icon");
-
-			foreach (CombinedFashionData fashion in data)
-			{
-				writer.WriteLine($"{CsvStr(fashion.Name)},{CsvStr(fashion.Desc)},{fashion.MaleId},{fashion.FemaleId},{CsvStr(fashion.Icon.Name)}");
-			}
-		}
-
-		private void WriteSql(IEnumerable<CombinedFashionData> data, ISqlWriter sqlWriter, Logger logger)
-		{
-			// Schema
-			// create table `fashion` (
-			//   `name` varchar(63) not null,
-			//   `desc` varchar(127),
-			//   `id_m` int not null,
-			//   `id_f` int not null,
-			//   `icon` varchar(127) not null,
-			//   primary key (`name`)
-			// )
-
-			sqlWriter.WriteStartTable("fashion");
-			foreach (CombinedFashionData fashion in data)
-			{
-				sqlWriter.WriteRow($"{DbStr(fashion.Name)}, {DbStr(fashion.Desc)}, {fashion.MaleId}, {fashion.FemaleId}, {DbStr(fashion.Icon.Name)}");
-			}
-			sqlWriter.WriteEndTable();
-		}
-
-		private void WriteTextures(IEnumerable<CombinedFashionData> data, Config config, Logger logger)
-		{
-			string outDir = Path.Combine(config.OutputDirectory, Name, "icons");
-			foreach (CombinedFashionData fashion in data)
-			{
-				TextureExporter.ExportTexture(config,fashion.Icon, false, logger, outDir);
-			}
 		}
 
 		private class FashionData : IComparable<FashionData>

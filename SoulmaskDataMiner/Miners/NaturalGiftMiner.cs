@@ -32,6 +32,39 @@ namespace SoulmaskDataMiner.Miners
 	[MinerName("Gift")]
 	internal class NaturalGiftMiner : MinerBase
 	{
+		// Row type for the unified gift table: pairs the gift with its source-of-effect.
+		private readonly record struct Row(ENaturalGiftSource Source, CombinedGiftData Gift);
+
+		// Schema
+		// create table `ng` (
+		//   `positive` bool,
+		//   `source` int,
+		//   `id1` int,
+		//   `id2` int,
+		//   `id3` int,
+		//   `title` varchar(255) not null,
+		//   `description` varchar(1023),
+		//   `icon` varchar(255)
+		// )
+		private static readonly MinerTable<Row> sTable = new(
+			csvFileName: "NaturalGift.csv",
+			sqlTableName: "ng",
+			columns:
+			[
+				TableColumn.Bool<Row>("positive", r => r.Gift.IsGood),
+				TableColumn.Int<Row>("source", r => (int)r.Source),
+				TableColumn.NullInt<Row>("id1", r => r.Gift.Level1),
+				TableColumn.NullInt<Row>("id2", r => r.Gift.Level2),
+				TableColumn.NullInt<Row>("id3", r => r.Gift.Level3),
+				TableColumn.Str<Row>("title", r => r.Gift.Title),
+				TableColumn.Str<Row>("description", r => r.Gift.Description),
+				TableColumn.Str<Row>("icon", r => r.Gift.Icon?.Name),
+			],
+			iconSelector: r => r.Gift.Icon)
+		{
+			DeduplicateIcons = true,
+		};
+
 		public override bool Run(IProviderManager providerManager, Config config, Logger logger, ISqlWriter sqlWriter)
 		{
 			if (!TryFindGifts(providerManager, config, logger, out IReadOnlyDictionary<ENaturalGiftSource, List<CombinedGiftData>>? combinedGifts))
@@ -39,13 +72,8 @@ namespace SoulmaskDataMiner.Miners
 				return false;
 			}
 
-			WriteCsv(combinedGifts, config, logger);
-
-			string sqlPath = Path.Combine(config.OutputDirectory, Name, "NaturalGifts.sql");
-			WriteSql(combinedGifts, sqlWriter, logger);
-
-			WriteTextures(combinedGifts, config, logger);
-
+			IEnumerable<Row> rows = combinedGifts.SelectMany(p => p.Value.Select(g => new Row(p.Key, g)));
+			WriteTable(rows, sTable, config, logger, sqlWriter);
 			return true;
 		}
 
@@ -159,69 +187,6 @@ namespace SoulmaskDataMiner.Miners
 			return true;
 		}
 
-		private void WriteCsv(IReadOnlyDictionary<ENaturalGiftSource, List<CombinedGiftData>> combinedGifts, Config config, Logger logger)
-		{
-			foreach (var pair in combinedGifts)
-			{
-				string outPathGood = Path.Combine(config.OutputDirectory, Name, $"Good_{TranslateGiftSource(pair.Key)}.csv");
-				string outPathBad = Path.Combine(config.OutputDirectory, Name, $"Bad_{TranslateGiftSource(pair.Key)}.csv");
-				using FileStream streamGood = IOUtil.CreateFile(outPathGood, logger);
-				using FileStream streamBad = IOUtil.CreateFile(outPathBad, logger);
-				using StreamWriter writerGood = new(streamGood, Encoding.UTF8);
-				using StreamWriter writerBad = new(streamBad, Encoding.UTF8);
-
-				writerGood.WriteLine("Level 1,Level 2, Level 3,Title,Description,Icon");
-				writerBad.WriteLine("Level 1,Level 2, Level 3,Title,Description,Icon");
-
-				foreach (CombinedGiftData gift in pair.Value)
-				{
-					StreamWriter writer = gift.IsGood ? writerGood : writerBad;
-					writer.WriteLine($"{gift.Level1},{gift.Level2},{gift.Level3},{CsvStr(gift.Title)},{CsvStr(gift.Description)},{gift.Icon?.Name}");
-				}
-			}
-		}
-
-		private void WriteSql(IReadOnlyDictionary<ENaturalGiftSource, List<CombinedGiftData>> combinedGifts, ISqlWriter sqlWriter, Logger logger)
-		{
-			// Schema
-			// create table `ng` (
-			//   `positive` bool,
-			//   `source` int,
-			//   `id1` int,
-			//   `id2` int,
-			//   `id3` int,
-			//   `title` varchar(255) not null,
-			//   `description` varchar(1023),
-			//   `icon` varchar(255)
-			// )
-
-			sqlWriter.WriteStartTable("ng");
-			foreach (var pair in combinedGifts)
-			{
-				foreach (CombinedGiftData gift in pair.Value)
-				{
-					sqlWriter.WriteRow($"{gift.IsGood}, {(int)pair.Key}, {DbVal(gift.Level1)}, {DbVal(gift.Level2)}, {DbVal(gift.Level3)}, {DbStr(gift.Title)}, {DbStr(gift.Description)}, {DbStr(gift.Icon?.Name)}");
-				}
-			}
-			sqlWriter.WriteEndTable();
-		}
-
-		private void WriteTextures(IReadOnlyDictionary<ENaturalGiftSource, List<CombinedGiftData>> combinedGifts, Config config, Logger logger)
-		{
-			HashSet<string> seenTextures = new();
-			string outDir = Path.Combine(config.OutputDirectory, Name, "icons");
-			foreach (var pair in combinedGifts)
-			{
-				foreach (CombinedGiftData data in pair.Value)
-				{
-					if (data.Icon is null) continue;
-					if (!seenTextures.Add(data.Icon!.Name)) continue;
-
-					TextureExporter.ExportTexture(config,data.Icon!, false, logger, outDir);
-				}
-			}
-		}
-
 		private static ENaturalGiftSource ParseSource(string text, int id, Logger logger)
 		{
 			text = text[(text.LastIndexOf(':') + 1)..];
@@ -238,24 +203,6 @@ namespace SoulmaskDataMiner.Miners
 				|| id >= 300000 && id < 510000
 				|| id >= 600000 && id < 900000 && id != 600051 && id != 600054 && id != 600056 && id != 600058;
 		}
-
-		private static string TranslateGiftSource(ENaturalGiftSource source)
-		{
-			return source switch
-			{
-				ENaturalGiftSource.Normal => "Normal",
-				ENaturalGiftSource.BornChuShen => "Origin",
-				ENaturalGiftSource.BornBuLuoCiTiao => "Tribe",
-				ENaturalGiftSource.ChengHao => "Title",
-				ENaturalGiftSource.JingLi => "Experience",
-				ENaturalGiftSource.XiHao => "Preference",
-				ENaturalGiftSource.XingGe => "Personality",
-				ENaturalGiftSource.GuanXi => "Relationship",
-				_ => "Unknown"
-			};
-		}
-
-
 
 		private struct GiftData : IComparable<GiftData>
 		{

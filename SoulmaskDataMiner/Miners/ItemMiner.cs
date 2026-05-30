@@ -45,6 +45,40 @@ namespace SoulmaskDataMiner.Miners
 			"HiddenItemInGameMode" // TODO: Do something with this variable
 		};
 
+		// Schema
+		// create table `item` (
+		//   `name` varchar(255) not null,
+		//   `class` varchar(255) not null,
+		//   `path` varchar(511) not null,
+		//   `desc` varchar(511),
+		//   `icon` varchar(255),
+		//   `stack` int not null,
+		//   `weight` float not null,
+		//   `cat` int not null,
+		//   `cat_name` varchar(63) not null,
+		//   `cat_icon` varchar(63)
+		// )
+		private static readonly MinerTable<ItemData> sTable = new(
+			csvFileName: "Item.csv",
+			sqlTableName: "item",
+			columns:
+			[
+				TableColumn.Str<ItemData>("name", i => i.Info.Name, treatNullAsEmpty: true),
+				TableColumn.Str<ItemData>("class", i => i.Info.ClassName),
+				TableColumn.Str<ItemData>("path", i => i.Info.FullPath),
+				TableColumn.Str<ItemData>("desc", i => i.Info.Description),
+				TableColumn.Str<ItemData>("icon", i => i.Info.Icon?.Name),
+				TableColumn.Int<ItemData>("stack", i => i.StackSize),
+				TableColumn.Float<ItemData>("weight", i => i.Weight),
+				TableColumn.Int<ItemData>("cat", i => i.CategoryID),
+				TableColumn.Str<ItemData>("cat_name", i => i.CategoryName),
+				TableColumn.Str<ItemData>("cat_icon", i => i.CategoryIcon.Name),
+			],
+			iconSelector: i => i.Info.Icon)
+		{
+			IconSubdir = Path.Combine("icons", "item"),
+		};
+
 		public override bool Run(IProviderManager providerManager, Config config, Logger logger, ISqlWriter sqlWriter)
 		{
 			var categories = GetItemCategories(providerManager, logger);
@@ -62,12 +96,12 @@ namespace SoulmaskDataMiner.Miners
 			}
 
 			IEnumerable<ObjectInfo> itemInfos = FindObjects(BaseClass_Item.AsEnumerable());
-			IEnumerable<ItemData> items = ReadItemData(itemInfos, categories, testIcon);
+			List<ItemData> items = ReadItemData(itemInfos, categories, testIcon).ToList();
 
-			WriteCsv(items, config, logger);
-			WriteSql(items, sqlWriter, logger);
-			WriteTextures(items, categories, config, logger);
-
+			WriteTable(items, sTable, config, logger, sqlWriter);
+			// Category icons live in a separate subdir and come from the category lookup,
+			// not per-row, so they get their own WriteIcons call.
+			WriteIcons(categories.Values, c => c.Icon, config, logger, Path.Combine("icons", "item_cat"));
 			return true;
 		}
 
@@ -177,62 +211,6 @@ namespace SoulmaskDataMiner.Miners
 					StackSize = stackSize,
 					Weight = weight
 				};
-			}
-		}
-
-		private void WriteCsv(IEnumerable<ItemData> items, Config config, Logger logger)
-		{
-			string outPath = Path.Combine(config.OutputDirectory, Name, $"{Name}.csv");
-			using (FileStream outFile = IOUtil.CreateFile(outPath, logger))
-			using (StreamWriter writer = new(outFile))
-			{
-				writer.WriteLine("name,class,desc,icon,stack,weight,cat,cat_name,cat_icon");
-				foreach (ItemData item in items)
-				{
-					writer.WriteLine($"{CsvStr(item.Info.Name)},{CsvStr(item.Info.FullPath)},{CsvStr(item.Info.Description)},{item.Info.Icon?.Name},{item.StackSize},{item.Weight},{item.CategoryID},{CsvStr(item.CategoryName)},{item.CategoryIcon.Name}");
-				}
-			}
-		}
-
-		private void WriteSql(IEnumerable<ItemData> items, ISqlWriter sqlWriter, Logger logger)
-		{
-			// Schema
-			// create table `item` (
-			//   `name` varchar(255) not null,
-			//   `class` varchar(255) not null,
-			//   `path` varchar(511) not null,
-			//   `desc` varchar(511),
-			//   `icon` varchar(255),
-			//   `stack` int not null,
-			//   `weight` float not null,
-			//   `cat` int not null,
-			//   `cat_name` varchar(63) not null,
-			//   `cat_icon` varchar(63)
-			// )
-
-			sqlWriter.WriteStartTable("item");
-			foreach (ItemData item in items)
-			{
-				sqlWriter.WriteRow($"{DbStr(item.Info.Name, true)}, {DbStr(item.Info.ClassName)}, {DbStr(item.Info.FullPath)}, {DbStr(item.Info.Description)}, {DbStr(item.Info.Icon?.Name)}, {item.StackSize}, {item.Weight}, {item.CategoryID}, {DbStr(item.CategoryName)}, {DbStr(item.CategoryIcon.Name)}");
-			}
-			sqlWriter.WriteEndTable();
-		}
-
-		private void WriteTextures(IEnumerable<ItemData> items, IReadOnlyDictionary<EDaoJuCaiLiaoType, ItemCategoryData> categories, Config config, Logger logger)
-		{
-			string outRoot = Path.Combine(config.OutputDirectory, Name, "icons");
-
-			string outDir = Path.Combine(outRoot, "item");
-			foreach (ItemData item in items)
-			{
-				if (item.Info.Icon is null) continue;
-				TextureExporter.ExportTexture(config,item.Info.Icon!, false, logger, outDir);
-			}
-
-			outDir = Path.Combine(outRoot, "item_cat");
-			foreach (ItemCategoryData category in categories.Values)
-			{
-				TextureExporter.ExportTexture(config,category.Icon, false, logger, outDir);
 			}
 		}
 

@@ -21,7 +21,6 @@ using SoulmaskDataMiner.Data;
 using SoulmaskDataMiner.GameData;
 using SoulmaskDataMiner.IO;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 
 namespace SoulmaskDataMiner.Miners
 {
@@ -31,18 +30,52 @@ namespace SoulmaskDataMiner.Miners
 	[MinerName("WenShen")]
 	internal class WenShenMiner : MinerBase
 	{
+		// Schema
+		// create table `wenshen` (
+		//   `name` varchar(127) not null,
+		//   `special` bool not null,
+		//   `head_m` int, `head_f` int, `head_ico` varchar(127),
+		//   `chest_m` int, `chest_f` int, `chest_ico` varchar(127),
+		//   `arm_m` int, `arm_f` int, `arm_ico` varchar(127),
+		//   `leg_m` int, `leg_f` int, `leg_ico` varchar(127),
+		//   primary key (`name`, `special`)
+		// )
+		private static readonly MinerTable<CombinedWenShenData> sTable = new(
+			csvFileName: "WenShen.csv",
+			sqlTableName: "wenshen",
+			columns:
+			[
+				TableColumn.Str<CombinedWenShenData>("name", ws => ws.Key.Name),
+				TableColumn.Bool<CombinedWenShenData>("special", ws => ws.Key.IsSpecial),
+				TableColumn.Int<CombinedWenShenData>("head_m", ws => ws.Head.MaleId),
+				TableColumn.Int<CombinedWenShenData>("head_f", ws => ws.Head.FemaleId),
+				TableColumn.Str<CombinedWenShenData>("head_ico", ws => ws.Head.Icon.Name),
+				TableColumn.Int<CombinedWenShenData>("chest_m", ws => ws.Chest.MaleId),
+				TableColumn.Int<CombinedWenShenData>("chest_f", ws => ws.Chest.FemaleId),
+				TableColumn.Str<CombinedWenShenData>("chest_ico", ws => ws.Chest.Icon.Name),
+				TableColumn.Int<CombinedWenShenData>("arm_m", ws => ws.Arm.MaleId),
+				TableColumn.Int<CombinedWenShenData>("arm_f", ws => ws.Arm.FemaleId),
+				TableColumn.Str<CombinedWenShenData>("arm_ico", ws => ws.Arm.Icon.Name),
+				TableColumn.Int<CombinedWenShenData>("leg_m", ws => ws.Leg.MaleId),
+				TableColumn.Int<CombinedWenShenData>("leg_f", ws => ws.Leg.FemaleId),
+				TableColumn.Str<CombinedWenShenData>("leg_ico", ws => ws.Leg.Icon.Name),
+			]);
+			// Each row has four icons (head, chest, arm, leg) so we drive icon export
+			// with separate WriteIcons calls below rather than via MinerTable.
+
 		public override bool Run(IProviderManager providerManager, Config config, Logger logger, ISqlWriter sqlWriter)
 		{
-			IEnumerable<CombinedWenShenData> data = GetWenShenData(providerManager, logger);
-			if (!data.Any())
+			List<CombinedWenShenData> data = GetWenShenData(providerManager, logger).ToList();
+			if (data.Count == 0)
 			{
 				return false;
 			}
 
-			WriteCsv(data, config, logger);
-			WriteSql(data, sqlWriter, logger);
-			WriteTextures(data, config, logger);
-
+			WriteTable(data, sTable, config, logger, sqlWriter);
+			WriteIcons(data, ws => ws.Head.Icon, config, logger);
+			WriteIcons(data, ws => ws.Chest.Icon, config, logger);
+			WriteIcons(data, ws => ws.Arm.Icon, config, logger);
+			WriteIcons(data, ws => ws.Leg.Icon, config, logger);
 			return true;
 		}
 
@@ -187,61 +220,6 @@ namespace SoulmaskDataMiner.Miners
 			wenShenList.Sort();
 
 			return wenShenList;
-		}
-
-		private void WriteCsv(IEnumerable<CombinedWenShenData> data, Config config, Logger logger)
-		{
-			string outPath = Path.Combine(config.OutputDirectory, Name, $"{Name}.csv");
-			using FileStream stream = IOUtil.CreateFile(outPath, logger);
-			using StreamWriter writer = new(stream, Encoding.UTF8);
-
-			writer.WriteLine("name,special,head_m,head_f,head_ico,chest_m,chest_f,chest_ico,arm_m,arm_f,arm_ico,leg_m,leg_f,leg_ico");
-
-			foreach (CombinedWenShenData ws in data)
-			{
-				writer.WriteLine($"{CsvStr(ws.Key.Name)},{ws.Key.IsSpecial},{ws.Head.MaleId},{ws.Head.FemaleId},{ws.Head.Icon.Name},{ws.Chest.MaleId},{ws.Chest.FemaleId},{ws.Chest.Icon.Name},{ws.Arm.MaleId},{ws.Arm.FemaleId},{ws.Arm.Icon.Name},{ws.Leg.MaleId},{ws.Leg.FemaleId},{ws.Leg.Icon.Name}");
-			}
-		}
-
-		private void WriteSql(IEnumerable<CombinedWenShenData> data, ISqlWriter sqlWriter, Logger logger)
-		{
-			// Schema
-			// create table `wenshen` (
-			//   `name` varchar(127) not null,
-			//   `special` bool not null,
-			//   `head_m` int,
-			//   `head_f` int,
-			//   `head_ico` varchar(127),
-			//   `chest_m` int,
-			//   `chest_f` int,
-			//   `chest_ico` varchar(127),
-			//   `arm_m` int,
-			//   `arm_f` int,
-			//   `arm_ico` varchar(127),
-			//   `leg_m` int,
-			//   `leg_f` int,
-			//   `leg_ico` varchar(127),
-			//   primary key (`name`, `special`)
-			// )
-
-			sqlWriter.WriteStartTable("wenshen");
-			foreach(CombinedWenShenData ws in data)
-			{
-				sqlWriter.WriteRow($"{DbStr(ws.Key.Name)}, {ws.Key.IsSpecial}, {ws.Head.MaleId}, {ws.Head.FemaleId}, {DbStr(ws.Head.Icon.Name)}, {ws.Chest.MaleId}, {ws.Chest.FemaleId}, {DbStr(ws.Chest.Icon.Name)}, {ws.Arm.MaleId}, {ws.Arm.FemaleId}, {DbStr(ws.Arm.Icon.Name)}, {ws.Leg.MaleId}, {ws.Leg.FemaleId}, {DbStr(ws.Leg.Icon.Name)}");
-			}
-			sqlWriter.WriteEndTable();
-		}
-
-		private void WriteTextures(IEnumerable<CombinedWenShenData> data, Config config, Logger logger)
-		{
-			string outDir = Path.Combine(config.OutputDirectory, Name, "icons");
-			foreach (CombinedWenShenData ws in data)
-			{
-				TextureExporter.ExportTexture(config,ws.Head.Icon, false, logger, outDir);
-				TextureExporter.ExportTexture(config,ws.Chest.Icon, false, logger, outDir);
-				TextureExporter.ExportTexture(config,ws.Arm.Icon, false, logger, outDir);
-				TextureExporter.ExportTexture(config,ws.Leg.Icon, false, logger, outDir);
-			}
 		}
 
 		private static bool TryParseIntFromEnd(string value, [NotNullWhen(true)] out string? truncated, out int result)

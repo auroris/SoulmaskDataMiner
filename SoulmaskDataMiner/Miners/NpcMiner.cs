@@ -35,6 +35,59 @@ namespace SoulmaskDataMiner.Miners
 		private const string BaseClassName_NonHuman = "HCharacterDongWu";
 		private const string BaseClassName_Human = "HCharacterRen";
 
+		// Row type for the unified NPC table: tags each NPC with its kind.
+		// 0 = animal, 1 = mechanical, 2 = human (matches existing SQL convention).
+		private readonly record struct NpcRow(int Type, ObjectInfo Info);
+
+		// Schema
+		// create table `npc`
+		// (
+		//   `type` int not null,
+		//   `name` varchar(255) not null,
+		//   `class` varchar(255) not null
+		// )
+		private static readonly MinerTable<NpcRow> sNpcTable = new(
+			csvFileName: "Npc.csv",
+			sqlTableName: "npc",
+			columns:
+			[
+				TableColumn.Int<NpcRow>("type", r => r.Type),
+				TableColumn.Str<NpcRow>("name", r => r.Info.Name, treatNullAsEmpty: true),
+				TableColumn.Str<NpcRow>("class", r => r.Info.ClassName),
+			]);
+
+		// Schema
+		// create table `sm`
+		// (
+		//   `number` int not null,
+		//   `name` varchar(255) not null,
+		//   `quality` int not null,
+		//   `status` varchar(31) not null,
+		//   `prof` varchar(511),
+		//   `ng` varchar(1023),
+		//   `male` bool not null,
+		//   `female` bool not null,
+		//   `min` int not null,
+		//   `max` int not null,
+		//   primary key (`number`)
+		// )
+		private static readonly MinerTable<SpecifiedManData> sSpecifiedManTable = new(
+			csvFileName: "SpecifiedMan.csv",
+			sqlTableName: "sm",
+			columns:
+			[
+				TableColumn.Int<SpecifiedManData>("number", sm => sm.Number),
+				TableColumn.Str<SpecifiedManData>("name", sm => sm.Name),
+				TableColumn.Int<SpecifiedManData>("quality", sm => sm.Quality),
+				TableColumn.Str<SpecifiedManData>("status", sm => sm.ClanStatus.ToEn()),
+				TableColumn.Str<SpecifiedManData>("prof", sm => string.Join("<br/>", sm.Proficiencies.Select(p => p.ToString()))),
+				TableColumn.Str<SpecifiedManData>("ng", sm => string.Join("<br/>", sm.NaturalGifts.Select(g => g.ToString()))),
+				TableColumn.Bool<SpecifiedManData>("male", sm => sm.HasMale),
+				TableColumn.Bool<SpecifiedManData>("female", sm => sm.HasFemale),
+				TableColumn.Int<SpecifiedManData>("min", sm => sm.MinLevel),
+				TableColumn.Int<SpecifiedManData>("max", sm => sm.MaxLevel),
+			]);
+
 		public override bool Run(IProviderManager providerManager, Config config, Logger logger, ISqlWriter sqlWriter)
 		{
 			IEnumerable<ObjectInfo> nonHumans = FindObjects(BaseClassName_NonHuman.AsEnumerable());
@@ -57,13 +110,14 @@ namespace SoulmaskDataMiner.Miners
 			IEnumerable<SpecifiedManData>? specifiedManData = FindSpecifiedManData(providerManager, logger);
 			if (specifiedManData is null) return false;
 
-			WriteCsv(animals, "Animal.csv", config, logger);
-			WriteCsv(mechanical, "Mechanical.csv", config, logger);
-			WriteCsv(humans, "Human.csv", config, logger);
-			WriteCsv(specifiedManData, "SpecifiedMan.csv", config, logger);
+			// Preserve historical SQL row order: animals (type=0), mechanicals (type=1), humans (type=2).
+			IEnumerable<NpcRow> npcRows = animals.Select(o => new NpcRow(0, o))
+				.Concat(mechanical.Select(o => new NpcRow(1, o)))
+				.Concat(humans.Select(o => new NpcRow(2, o)));
 
-			WriteSql(animals, mechanical, humans, specifiedManData, sqlWriter, logger);
-
+			WriteTable(npcRows, sNpcTable, config, logger, sqlWriter);
+			sqlWriter.WriteEmptyLine();
+			WriteTable(specifiedManData, sSpecifiedManTable, config, logger, sqlWriter);
 			return true;
 		}
 
@@ -266,91 +320,6 @@ namespace SoulmaskDataMiner.Miners
 			}
 
 			return gifts;
-		}
-
-		private void WriteCsv(IEnumerable<ObjectInfo> items, string filename, Config config, Logger logger)
-		{
-			string outPath = Path.Combine(config.OutputDirectory, Name, filename);
-			using (FileStream outFile = IOUtil.CreateFile(outPath, logger))
-			using (StreamWriter writer = new(outFile))
-			{
-				writer.WriteLine("name,class");
-				foreach (ObjectInfo info in items)
-				{
-					writer.WriteLine($"\"{info.Name}\",\"{info.ClassName}\"");
-				}
-			}
-		}
-
-		private void WriteCsv(IEnumerable<SpecifiedManData> specifiedManData, string filename, Config config, Logger logger)
-		{
-			string outPath = Path.Combine(config.OutputDirectory, Name, filename);
-			using (FileStream outFile = IOUtil.CreateFile(outPath, logger))
-			using (StreamWriter writer = new(outFile))
-			{
-				writer.WriteLine("number,name,quality,status,prof,ng,male,fermale,min,max");
-				foreach (SpecifiedManData sm in specifiedManData)
-				{
-					string proficiencies = string.Join('\n', sm.Proficiencies.Select(p => p.ToString()));
-					string gifts = string.Join('\n', sm.NaturalGifts.Select(g => g.ToString()));
-					writer.WriteLine($"{sm.Number},{CsvStr(sm.Name)},{sm.Quality},{CsvStr(sm.ClanStatus.ToEn())},{CsvStr(proficiencies)},{CsvStr(gifts)},{sm.HasMale},{sm.HasFemale},{sm.MinLevel},{sm.MaxLevel}");
-				}
-			}
-		}
-
-		private void WriteSql(IEnumerable<ObjectInfo> animals, IEnumerable<ObjectInfo> mechanical, IEnumerable<ObjectInfo> humans, IEnumerable<SpecifiedManData> specifiedManData, ISqlWriter sqlWriter, Logger logger)
-		{
-			// Schema
-			// create table `npc`
-			// (
-			//   `type` int not null,
-			//   `name` varchar(255) not null,
-			//   `class` varchar(255) not null
-			// )
-
-			sqlWriter.WriteStartTable("npc");
-
-			foreach (ObjectInfo npc in animals)
-			{
-				sqlWriter.WriteRow($"0, {DbStr(npc.Name, true)}, {DbStr(npc.ClassName)}");
-			}
-			foreach (ObjectInfo npc in mechanical)
-			{
-				sqlWriter.WriteRow($"1, {DbStr(npc.Name, true)}, {DbStr(npc.ClassName)}");
-			}
-			foreach (ObjectInfo npc in humans)
-			{
-				sqlWriter.WriteRow($"2, {DbStr(npc.Name, true)} ,  {DbStr(npc.ClassName)}");
-			}
-
-			sqlWriter.WriteEndTable();
-
-			sqlWriter.WriteEmptyLine();
-
-			// Schema
-			// create table `sm`
-			// (
-			//   `number` int not null,
-			//   `name` varchar(255) not null,
-			//   `quality` int not null,
-			//   `status` varchar(31) not null,
-			//   `prof` varchar(511),
-			//   `ng` varchar(1023),
-			//   `male` bool not null,
-			//   `female` bool not null,
-			//   `min` int not null,
-			//   `max` int not null,
-			//   primary key (`number`)
-			// )
-
-			sqlWriter.WriteStartTable("sm");
-			foreach (SpecifiedManData sm in specifiedManData)
-			{
-				string proficiencies = string.Join("<br/>", sm.Proficiencies.Select(p => p.ToString()));
-				string gifts = string.Join("<br/>", sm.NaturalGifts.Select(g => g.ToString()));
-				sqlWriter.WriteRow($"{sm.Number},{DbStr(sm.Name)},{sm.Quality},{DbStr(sm.ClanStatus.ToEn())},{DbStr(proficiencies)},{DbStr(gifts)},{sm.HasMale},{sm.HasFemale},{sm.MinLevel},{sm.MaxLevel}");
-			}
-			sqlWriter.WriteEndTable();
 		}
 
 		private struct SpecifiedManData

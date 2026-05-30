@@ -22,7 +22,6 @@ using SoulmaskDataMiner.Data;
 using SoulmaskDataMiner.GameData;
 using SoulmaskDataMiner.IO;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 
 namespace SoulmaskDataMiner.Miners
 {
@@ -32,6 +31,26 @@ namespace SoulmaskDataMiner.Miners
 	[MinerName("Proficiency")]
 	internal class ProficiencyMiner : MinerBase
 	{
+		// Schema
+		// create table `sld` (
+		//   `id` int not null,
+		//   `type` varchar(127) not null,
+		//   `name` varchar(127),
+		//   `icon` varchar(127),
+		//   primary key (`id`)
+		// )
+		private static readonly MinerTable<ProficiencyData> sTable = new(
+			csvFileName: "Proficiency.csv",
+			sqlTableName: "sld",
+			columns:
+			[
+				TableColumn.Int<ProficiencyData>("id", p => (int)p.ID),
+				TableColumn.Str<ProficiencyData>("type", p => p.ID.ToString()),
+				TableColumn.Str<ProficiencyData>("name", p => p.Name),
+				TableColumn.Str<ProficiencyData>("icon", p => p.Icon?.Name),
+			],
+			iconSelector: p => p.Icon);
+
 		public override bool Run(IProviderManager providerManager, Config config, Logger logger, ISqlWriter sqlWriter)
 		{
 			IEnumerable<ProficiencyData>? proficiencies;
@@ -40,10 +59,7 @@ namespace SoulmaskDataMiner.Miners
 				return false;
 			}
 
-			WriteCsv(proficiencies, config, logger);
-			WriteSql(proficiencies, sqlWriter, logger);
-			WriteTextures(proficiencies, config, logger);
-
+			WriteTable(proficiencies, sTable, config, logger, sqlWriter);
 			return true;
 		}
 
@@ -141,48 +157,6 @@ namespace SoulmaskDataMiner.Miners
 			return true;
 		}
 
-		private void WriteCsv(IEnumerable<ProficiencyData> proficiencies, Config config, Logger logger)
-		{
-			string outPath = Path.Combine(config.OutputDirectory, Name, $"{Name}.csv");
-			using FileStream stream = IOUtil.CreateFile(outPath, logger);
-			using StreamWriter writer = new(stream, Encoding.UTF8);
-
-			writer.WriteLine("idx,id,name,icon");
-
-			foreach (ProficiencyData proficiency in proficiencies)
-			{
-				writer.WriteLine($"{(int)proficiency.ID},{proficiency.ID},{CsvStr(proficiency.Name)},{CsvStr(proficiency.Icon?.Name)}");
-			}
-		}
-
-		private void WriteSql(IEnumerable<ProficiencyData> proficiencies, ISqlWriter sqlWriter, Logger logger)
-		{
-			// Schema
-			// create table `sld` (
-			//   `id` int not null,
-			//   `type` varchar(127) not null,
-			//   `name` varchar(127),
-			//   `icon` varchar(127),
-			//   primary key (`id`)
-			// )
-
-			sqlWriter.WriteStartTable("sld");
-			foreach (ProficiencyData proficiency in proficiencies)
-			{
-				sqlWriter.WriteRow($"{(int)proficiency.ID},{DbStr(proficiency.ID.ToString())},{DbStr(proficiency.Name)},{DbStr(proficiency.Icon?.Name)}");
-			}
-			sqlWriter.WriteEndTable();
-		}
-
-		private void WriteTextures(IEnumerable<ProficiencyData> proficiencies, Config config, Logger logger)
-		{
-			string outDir = Path.Combine(config.OutputDirectory, Name, "icons");
-			foreach (ProficiencyData proficiency in proficiencies)
-			{
-				if (proficiency.Icon is null) continue;
-				TextureExporter.ExportTexture(config,proficiency.Icon, false, logger, outDir);
-			}
-		}
 	}
 
 	internal struct ProficiencyData

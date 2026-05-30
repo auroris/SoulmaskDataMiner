@@ -26,7 +26,6 @@ using SoulmaskDataMiner.Data;
 using SoulmaskDataMiner.GameData;
 using SoulmaskDataMiner.IO;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 
 namespace SoulmaskDataMiner.Miners
 {
@@ -36,6 +35,40 @@ namespace SoulmaskDataMiner.Miners
 	[MinerName("Mastery")]
 	internal class WeaponMasteryMiner : MinerBase
 	{
+		// Row type for the flat output: one entry per (weapon type, index-in-type, data).
+		private readonly record struct Row(EWuQiLeiXing Type, int Idx, MasteryData Data);
+
+		// Schema
+		// create table `zj` (
+		//   `type` int not null,
+		//   `idx` int not null,
+		//   `id` int not null,
+		//   `name` varchar(127) not null,
+		//   `desc` varchar(511),
+		//   `start` bool not null,
+		//   `c30` float not null, `c60` float not null, `c90` float not null, `c120` float not null,
+		//   `icon` varchar(127),
+		//   primary key (`type`, `idx`)
+		// )
+		private static readonly MinerTable<Row> sTable = new(
+			csvFileName: "Mastery.csv",
+			sqlTableName: "zj",
+			columns:
+			[
+				TableColumn.Int<Row>("type", r => (int)r.Type),
+				TableColumn.Int<Row>("idx", r => r.Idx),
+				TableColumn.Int<Row>("id", r => r.Data.ID),
+				TableColumn.Str<Row>("name", r => r.Data.Name),
+				TableColumn.Str<Row>("desc", r => r.Data.Description),
+				TableColumn.Bool<Row>("start", r => r.Data.IsStartingAbility),
+				TableColumn.Float<Row>("c30", r => r.Data.Chance30),
+				TableColumn.Float<Row>("c60", r => r.Data.Chance60),
+				TableColumn.Float<Row>("c90", r => r.Data.Chance90),
+				TableColumn.Float<Row>("c120", r => r.Data.Chance120),
+				TableColumn.Str<Row>("icon", r => r.Data.Icon?.Name),
+			],
+			iconSelector: r => r.Data.Icon);
+
 		public override bool Run(IProviderManager providerManager, Config config, Logger logger, ISqlWriter sqlWriter)
 		{
 			IReadOnlyDictionary<EWuQiLeiXing, List<MasteryData>>? masteries;
@@ -44,10 +77,9 @@ namespace SoulmaskDataMiner.Miners
 				return false;
 			}
 
-			WriteCsv(masteries, config, logger);
-			WriteSql(masteries, sqlWriter, logger);
-			WriteTextures(masteries, config, logger);
-
+			IEnumerable<Row> rows = masteries.SelectMany(p =>
+				p.Value.Select((data, i) => new Row(p.Key, i, data)));
+			WriteTable(rows, sTable, config, logger, sqlWriter);
 			return true;
 		}
 
@@ -256,68 +288,6 @@ namespace SoulmaskDataMiner.Miners
 			}
 
 			return masteryAcquireMap;
-		}
-
-		private void WriteCsv(IReadOnlyDictionary<EWuQiLeiXing, List<MasteryData>> masteries, Config config, Logger logger)
-		{
-			string outPath = Path.Combine(config.OutputDirectory, Name, $"{Name}.csv");
-			using FileStream stream = IOUtil.CreateFile(outPath, logger);
-			using StreamWriter writer = new(stream, Encoding.UTF8);
-
-			writer.WriteLine("type,idx,id,name,desc,start,c30,c60,c90,c120,icon");
-
-			foreach (var pair in masteries)
-			{
-				for (int i = 0; i < pair.Value.Count; ++i)
-				{
-					MasteryData data = pair.Value[i];
-					writer.WriteLine($"{(int)pair.Key},{i},{data.ID},{CsvStr(data.Name)},{CsvStr(data.Description)},{data.IsStartingAbility},{data.Chance30:0.#%},{data.Chance60:0.#%},{data.Chance90:0.#%},{data.Chance120:0.#%},{data.Icon?.Name}");
-				}
-			}
-		}
-
-		private void WriteSql(IReadOnlyDictionary<EWuQiLeiXing, List<MasteryData>> masteries, ISqlWriter sqlWriter, Logger logger)
-		{
-			// Schema
-			// create table `zj` (
-			//   `type` int not null,
-			//   `idx` int not null,
-			//   `id` int not null,
-			//   `name` varchar(127) not null,
-			//   `desc` varchar(511),
-			//   `start` bool not null,
-			//   `c30` float not null,
-			//   `c60` float not null,
-			//   `c90` float not null,
-			//   `c120` float not null,
-			//   `icon` varchar(127),
-			//   primary key (`type`, `idx`)
-			// )
-
-			sqlWriter.WriteStartTable("zj");
-			foreach (var pair in masteries)
-			{
-				for (int i = 0; i < pair.Value.Count; ++i)
-				{
-					MasteryData data = pair.Value[i];
-					string isStart = data.IsStartingAbility.ToString().ToLowerInvariant();
-					sqlWriter.WriteRow($"{(int)pair.Key}, {i}, {data.ID}, {DbStr(data.Name)}, {DbStr(data.Description)}, {isStart}, {data.Chance30}, {data.Chance60}, {data.Chance90}, {data.Chance120}, {DbStr(data.Icon?.Name)}");
-				}
-			}
-			sqlWriter.WriteEndTable();
-		}
-
-		private void WriteTextures(IReadOnlyDictionary<EWuQiLeiXing, List<MasteryData>> masteries, Config config, Logger logger)
-		{
-			string outDir = Path.Combine(config.OutputDirectory, Name, "icons");
-			foreach (var pair in masteries)
-			{
-				for (int i = 0; i < pair.Value.Count; ++i)
-				{
-					if (pair.Value[i].Icon is null) continue;
-					TextureExporter.ExportTexture(config,pair.Value[i].Icon!, false, logger, outDir);
-				}
-			}
 		}
 
 		private static void ParseAbility(UObject ability, ref MasteryData mastery)

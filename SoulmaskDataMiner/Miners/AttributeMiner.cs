@@ -22,7 +22,6 @@ using SoulmaskDataMiner.Data;
 using SoulmaskDataMiner.GameData;
 using SoulmaskDataMiner.IO;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 
 namespace SoulmaskDataMiner.Miners
 {
@@ -32,6 +31,26 @@ namespace SoulmaskDataMiner.Miners
 	[MinerName("Attribute"), RequireClassData(true)]
 	internal class AttributeMiner : MinerBase
 	{
+		// Schema
+		// create table `attr` (
+		//   `idx` int not null,
+		//   `class` varchar(63) not null,
+		//   `name` varchar(63),
+		//   `icon` varchar(63),
+		//   primary key (`idx`)
+		// )
+		private static readonly MinerTable<(int idx, AttributeData a)> sTable = new(
+			csvFileName: "Attribute.csv",
+			sqlTableName: "attr",
+			columns:
+			[
+				TableColumn.Int<(int idx, AttributeData a)>("idx", r => r.idx),
+				TableColumn.Str<(int idx, AttributeData a)>("class", r => r.a.ClassName),
+				TableColumn.Str<(int idx, AttributeData a)>("name", r => r.a.DisplayName),
+				TableColumn.Str<(int idx, AttributeData a)>("icon", r => r.a.Icon?.Name),
+			],
+			iconSelector: r => r.a.Icon);
+
 		public override bool Run(IProviderManager providerManager, Config config, Logger logger, ISqlWriter sqlWriter)
 		{
 			IEnumerable<AttributeData>? attributes;
@@ -44,10 +63,7 @@ namespace SoulmaskDataMiner.Miners
 				return false;
 			}
 
-			WriteCsv(attributes, config, logger);
-			WriteSql(attributes, sqlWriter, logger);
-			WriteTextures(attributes, config, logger);
-
+			WriteTable(attributes.Select((a, i) => (i, a)), sTable, config, logger, sqlWriter);
 			return true;
 		}
 
@@ -184,50 +200,6 @@ namespace SoulmaskDataMiner.Miners
 			}
 
 			return true;
-		}
-
-		private void WriteCsv(IEnumerable<AttributeData> attributes, Config config, Logger logger)
-		{
-			string outPath = Path.Combine(config.OutputDirectory, Name, $"{Name}.csv");
-			using FileStream stream = IOUtil.CreateFile(outPath, logger);
-			using StreamWriter writer = new(stream, Encoding.UTF8);
-
-			writer.WriteLine("class,desc");
-
-			foreach (AttributeData attribute in attributes)
-			{
-				writer.WriteLine($"{CsvStr(attribute.ClassName)},");
-			}
-		}
-
-		private void WriteSql(IEnumerable<AttributeData> attributes, ISqlWriter sqlWriter, Logger logger)
-		{
-			// Schema
-			// create table `attr` (
-			//   `idx` int not null,
-			//   `class` varchar(63) not null,
-			//   `name` varchar(63),
-			//   `icon` varchar(63),
-			//   primary key (`idx`)
-			// )
-
-			sqlWriter.WriteStartTable("attr");
-			int i = 0;
-			foreach (AttributeData attribute in attributes)
-			{
-				sqlWriter.WriteRow($"{i++}, {DbStr(attribute.ClassName)}, {DbStr(attribute.DisplayName)}, {DbStr(attribute.Icon?.Name)}");
-			}
-			sqlWriter.WriteEndTable();
-		}
-
-		private void WriteTextures(IEnumerable<AttributeData> attributes, Config config, Logger logger)
-		{
-			string outDir = Path.Combine(config.OutputDirectory, Name, "icons");
-			foreach (AttributeData attr in attributes)
-			{
-				if (attr.Icon is null) continue;
-				TextureExporter.ExportTexture(config,attr.Icon, false, logger, outDir);
-			}
 		}
 
 		private class AttributeData

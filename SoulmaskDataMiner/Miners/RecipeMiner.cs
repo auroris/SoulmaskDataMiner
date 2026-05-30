@@ -58,6 +58,73 @@ namespace SoulmaskDataMiner.Miners
 			];
 		}
 
+		// Row type for the flat recipe table: pairs each recipe with its proficiency group.
+		private readonly record struct RecipeRow(EProficiency Prof, RecipeInfo Recipe);
+
+		// Schema
+		// create table `recipe`
+		// (
+		//   `prof` int not null,
+		//   `id` varchar(127) not null,
+		//   `bench` varchar(511) not null,
+		//   `name` varchar(127) not null,
+		//   `desc` varchar(511),
+		//   `icon` varchar(255),
+		//   `level` int not null,
+		//   `time` float not null,
+		//   `exp` int not null,
+		//   `profexp` float not null,
+		//   `inputs` varchar(2047) not null,
+		//   `energy` int,
+		//   `output` varchar(255),
+		//   `modemask` tinyint unsigned
+		// )
+		private static readonly MinerTable<RecipeRow> sRecipeTable = new(
+			csvFileName: "Recipe.csv",
+			sqlTableName: "recipe",
+			columns:
+			[
+				TableColumn.Int<RecipeRow>("prof", r => (int)r.Prof),
+				TableColumn.Str<RecipeRow>("id", r => r.Recipe.UniqueID),
+				TableColumn.Str<RecipeRow>("bench", r => FormatWorkbenchesJson(r.Recipe.Workbenches)),
+				TableColumn.Str<RecipeRow>("name", r => r.Recipe.Name),
+				TableColumn.Str<RecipeRow>("desc", r => r.Recipe.Description),
+				TableColumn.Str<RecipeRow>("icon", r => r.Recipe.Icon.Name),
+				TableColumn.Int<RecipeRow>("level", r => r.Recipe.Level),
+				TableColumn.Float<RecipeRow>("time", r => r.Recipe.CraftTime),
+				TableColumn.Int<RecipeRow>("exp", r => r.Recipe.ExpGain),
+				TableColumn.Float<RecipeRow>("profexp", r => r.Recipe.ProficiencyExpGain),
+				TableColumn.Str<RecipeRow>("inputs", r => FormatInputsJson(r.Recipe.InputItems)),
+				TableColumn.NullInt<RecipeRow>("energy", r => r.Recipe.MaskEnergy),
+				TableColumn.Str<RecipeRow>("output", r => r.Recipe.OutputItem),
+				TableColumn.NullInt<RecipeRow>("modemask", r => r.Recipe.GameModeMask),
+			],
+			iconSelector: r => r.Recipe.Icon)
+		{
+			IconSubdir = "Icon",
+		};
+
+		// Schema
+		// create table `bench`
+		// (
+		//   `class` varchar(255) not null,
+		//   `name` varchar(127) not null,
+		//   `icon` varchar(255)
+		// )
+		private static readonly MinerTable<KeyValuePair<string, WorkbenchInfo>> sWorkbenchTable = new(
+			csvFileName: "Workbenches.csv",
+			sqlTableName: "bench",
+			columns:
+			[
+				TableColumn.Str<KeyValuePair<string, WorkbenchInfo>>("class", p => p.Key),
+				TableColumn.Str<KeyValuePair<string, WorkbenchInfo>>("name", p => p.Value.Name),
+				TableColumn.Str<KeyValuePair<string, WorkbenchInfo>>("icon", p => p.Value.Icon?.Name),
+			],
+			iconSelector: p => p.Value.Icon)
+		{
+			IconSubdir = "BenchIcon",
+		};
+
 		public override bool Run(IProviderManager providerManager, Config config, Logger logger, ISqlWriter sqlWriter)
 		{
 			IEnumerable<ObjectInfo> formulaObjects = FindObjects(BaseClassName_Formula.AsEnumerable());
@@ -111,158 +178,39 @@ namespace SoulmaskDataMiner.Miners
 				workbenchMap.Add(workbenchIndex.Value.Name, workbenchInfo);
 			}
 
-			WriteRecipeIcons(recipeMap, config, logger);
-			WriteWorkbenchIcons(workbenchMap, config, logger);
+			IEnumerable<RecipeRow> recipeRows = recipeMap
+				.OrderBy(kvp => kvp.Key)
+				.SelectMany(kvp => kvp.Value.Select(r => new RecipeRow(kvp.Key, r)));
+			IEnumerable<KeyValuePair<string, WorkbenchInfo>> workbenchRows = workbenchMap.OrderBy(kvp => kvp.Key);
 
-			WriteRecipeCsv(recipeMap, config, logger);
-			WriteWorkbenchCsv(workbenchMap, config, logger);
-
-			WriteRecipeSql(recipeMap, sqlWriter, logger);
+			WriteTable(recipeRows, sRecipeTable, config, logger, sqlWriter);
 			sqlWriter.WriteEmptyLine();
-			WriteWorkbenchSql(workbenchMap, sqlWriter, logger);
+			WriteTable(workbenchRows, sWorkbenchTable, config, logger, sqlWriter);
 
 			return true;
 		}
 
-		private void WriteRecipeIcons(IReadOnlyDictionary<EProficiency, List<RecipeInfo>> recipeMap, Config config, Logger logger)
+		private static string FormatWorkbenchesJson(IReadOnlyList<FPackageIndex> workbenches)
 		{
-			string outDir = Path.Combine(config.OutputDirectory, Name, "Icon");
-			foreach (var pair in recipeMap)
-			{
-				foreach (RecipeInfo recipe in pair.Value)
-				{
-					TextureExporter.ExportTexture(config,recipe.Icon, false, logger, outDir);
-				}
-			}
+			if (workbenches.Count == 0) return "[]";
+			return $"[\"{string.Join("\",\"", workbenches.Select(b => b.Name))}\"]";
 		}
 
-		private void WriteWorkbenchIcons(IReadOnlyDictionary<string, WorkbenchInfo> workbenchMap, Config config, Logger logger)
+		private static string FormatInputsJson(IReadOnlyList<RecipeIngredient> inputs)
 		{
-			string outDir = Path.Combine(config.OutputDirectory, Name, "BenchIcon");
-			foreach (var pair in workbenchMap)
+			if (inputs.Count == 0) return "[]";
+			StringBuilder builder = new("[");
+			foreach (RecipeIngredient ingredient in inputs)
 			{
-				if (pair.Value.Icon is null) continue;
-
-				TextureExporter.ExportTexture(config,pair.Value.Icon, false, logger, outDir);
+				builder.Append("{");
+				builder.Append($"\"c\":{ingredient.Quantity},");
+				builder.Append("\"m\":[");
+				builder.Append($"\"{string.Join("\",\"", ingredient.Names)}\"");
+				builder.Append("]},");
 			}
-		}
-
-		private void WriteRecipeCsv(IReadOnlyDictionary<EProficiency, List<RecipeInfo>> recipeMap, Config config, Logger logger)
-		{
-			foreach (var pair in recipeMap)
-			{
-				string outPath = Path.Combine(config.OutputDirectory, Name, $"{pair.Key}.csv");
-				using (FileStream outFile = IOUtil.CreateFile(outPath, logger))
-				using (StreamWriter writer = new(outFile))
-				{
-					writer.WriteLine("id,bench,name,description,icon,level,time,exp,profexp,inputs,energy,output,hiddenmodes");
-					foreach (RecipeInfo r in pair.Value)
-					{
-						string workbenches = string.Join(", ", r.Workbenches.Select(w => w.Name));
-						string inputs = string.Join(" + ", r.InputItems.Select(i => $"{i.Quantity} [{string.Join(" | ", i.Names)}]"));
-						string hiddenInModes = string.Join(", ", r.HiddenInGameModes);
-						string energy = r.MaskEnergy.HasValue ? r.MaskEnergy.Value.ToString() : string.Empty;
-						writer.WriteLine($"{CsvStr(r.UniqueID)},{CsvStr(workbenches)},{CsvStr(r.Name)},{CsvStr(r.Description)},{CsvStr(r.Icon.Name)},{r.Level},{r.CraftTime},{r.ExpGain},{r.ProficiencyExpGain},{CsvStr(inputs)},{energy},{CsvStr(r.OutputItem)},{CsvStr(hiddenInModes)}");
-					}
-				}
-			}
-		}
-
-		private void WriteWorkbenchCsv(IReadOnlyDictionary<string, WorkbenchInfo> workbenchMap, Config config, Logger logger)
-		{
-			string outPath = Path.Combine(config.OutputDirectory, Name, "Workbenches.csv");
-			using (FileStream outFile = IOUtil.CreateFile(outPath, logger))
-			using (StreamWriter writer = new(outFile))
-			{
-				writer.WriteLine("class,name,icon");
-				foreach (var pair in workbenchMap.OrderBy(kvp => kvp.Key))
-				{
-					writer.WriteLine($"{CsvStr(pair.Key)},{CsvStr(pair.Value.Name)},{CsvStr(pair.Value.Icon?.Name)}");
-				}
-			}
-		}
-
-		private void WriteRecipeSql(IReadOnlyDictionary<EProficiency, List<RecipeInfo>> recipeMap, ISqlWriter sqlWriter, Logger logger)
-		{
-			// Schema
-			// create table `recipe`
-			// (
-			//   `prof` int not null,
-			//   `id` varchar(127) not null,
-			//   `bench` varchar(511) not null,
-			//   `name` varchar(127) not null,
-			//   `desc` varchar(511),
-			//   `icon` varchar(255),
-			//   `level` int not null,
-			//   `time` float not null,
-			//   `exp` int not null,
-			//   `profexp` float not null,
-			//   `inputs` varchar(2047) not null,
-			//   `energy` int,
-			//   `output` varchar(255),
-			//   `modemask` tinyint unsigned
-			// )
-
-			sqlWriter.WriteStartTable("recipe");
-
-			foreach (var pair in recipeMap.OrderBy(kvp => kvp.Key))
-			{
-				foreach (RecipeInfo r in pair.Value)
-				{
-					string benches;
-					if (r.Workbenches.Count > 0)
-					{
-						benches = $"[\"{string.Join("\",\"", r.Workbenches.Select(b => b.Name))}\"]";
-					}
-					else
-					{
-						benches = "[]";
-					}
-
-					string inputs;
-					if (r.InputItems.Count > 0)
-					{
-						StringBuilder inputBuilder = new("[");
-						foreach (RecipeIngredient ingredient in r.InputItems)
-						{
-							inputBuilder.Append("{");
-							inputBuilder.Append($"\"c\":{ingredient.Quantity},");
-							inputBuilder.Append($"\"m\":[");
-							inputBuilder.Append($"\"{string.Join("\",\"", ingredient.Names)}\"");
-							inputBuilder.Append("]},");
-						}
-						--inputBuilder.Length; // Remove trailing comma
-						inputBuilder.Append("]");
-						inputs = inputBuilder.ToString();
-					}
-					else
-					{
-						inputs = "[]";
-					}
-
-					sqlWriter.WriteRow($"{(int)pair.Key}, {DbStr(r.UniqueID)}, {DbStr(benches)}, {DbStr(r.Name)}, {DbStr(r.Description)}, {DbStr(r.Icon.Name)}, {r.Level}, {r.CraftTime}, {r.ExpGain}, {r.ProficiencyExpGain}, {DbStr(inputs)}, {DbVal(r.MaskEnergy)}, {DbStr(r.OutputItem)}, {DbVal(r.GameModeMask)}");
-				}
-			}
-			sqlWriter.WriteEndTable();
-		}
-
-		private void WriteWorkbenchSql(IReadOnlyDictionary<string, WorkbenchInfo> workbenchMap, ISqlWriter sqlWriter, Logger logger)
-		{
-			// Schema
-			// create table `bench`
-			// (
-			//   `class` varchar(255) not null,
-			//   `name` varchar(127) not null,
-			//   `icon` varchar(255)
-			// )
-
-			sqlWriter.WriteStartTable("bench");
-
-			foreach (var pair in workbenchMap.OrderBy(kvp => kvp.Key))
-			{
-				sqlWriter.WriteRow($"{DbStr(pair.Key)},{DbStr(pair.Value.Name)},{DbStr(pair.Value.Icon?.Name)}");
-			}
-			sqlWriter.WriteEndTable();
+			--builder.Length; // remove trailing comma
+			builder.Append("]");
+			return builder.ToString();
 		}
 
 		private class RecipeInfo : IComparable<RecipeInfo>

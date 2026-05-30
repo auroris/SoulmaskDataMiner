@@ -29,6 +29,25 @@ namespace SoulmaskDataMiner.Miners
 
 		private const string BaseClass_Building = "HJianZhuBase";
 
+		// Schema
+		// create table `building` (
+		//   `class` varchar(255) not null,
+		//   `name` varchar(127) not null,
+		//   `path` varchar(511) not null,
+		//   `icon` varchar(255)
+		// )
+		private static readonly MinerTable<ObjectInfo> sTable = new(
+			csvFileName: "Building.csv",
+			sqlTableName: "building",
+			columns:
+			[
+				TableColumn.Str<ObjectInfo>("class", b => b.ClassName),
+				TableColumn.Str<ObjectInfo>("name", b => b.Name),
+				TableColumn.Str<ObjectInfo>("path", b => b.FullPath),
+				TableColumn.Str<ObjectInfo>("icon", b => b.Icon?.Name),
+			],
+			iconSelector: b => b.Icon);
+
 		public override bool Run(IProviderManager providerManager, Config config, Logger logger, ISqlWriter sqlWriter)
 		{
 			List<ObjectInfo> buildings = new();
@@ -49,53 +68,8 @@ namespace SoulmaskDataMiner.Miners
 			}
 
 			logger.Information($"Found {buildings.Count} buildings");
-
-			WriteCsv(buildings, config, logger);
-			WriteSql(buildings, sqlWriter, logger);
-			WriteTextures(buildings, config, logger);
-
+			WriteTable(buildings, sTable, config, logger, sqlWriter);
 			return true;
-		}
-
-		private void WriteCsv(IEnumerable<ObjectInfo> buildings, Config config, Logger logger)
-		{
-			string outPath = Path.Combine(config.OutputDirectory, Name, $"{Name}.csv");
-			using FileStream outFile = IOUtil.CreateFile(outPath, logger);
-			using StreamWriter writer = new(outFile);
-
-			writer.WriteLine("class,name,path,icon");
-			foreach (ObjectInfo b in buildings)
-			{
-				writer.WriteLine($"{CsvStr(b.ClassName)},{CsvStr(b.Name)},{CsvStr(b.FullPath)},{b.Icon?.Name}");
-			}
-		}
-
-		private void WriteSql(IEnumerable<ObjectInfo> buildings, ISqlWriter sqlWriter, Logger logger)
-		{
-			// Schema
-			// create table `building` (
-			//   `class` varchar(255) not null,
-			//   `name` varchar(127) not null,
-			//   `path` varchar(511) not null,
-			//   `icon` varchar(255)
-			// )
-
-			sqlWriter.WriteStartTable("building");
-			foreach (ObjectInfo b in buildings)
-			{
-				sqlWriter.WriteRow($"{DbStr(b.ClassName)}, {DbStr(b.Name)}, {DbStr(b.FullPath)}, {DbStr(b.Icon?.Name)}");
-			}
-			sqlWriter.WriteEndTable();
-		}
-
-		private void WriteTextures(IEnumerable<ObjectInfo> buildings, Config config, Logger logger)
-		{
-			string outDir = Path.Combine(config.OutputDirectory, Name, "icons");
-			foreach (ObjectInfo b in buildings)
-			{
-				if (b.Icon is null) continue;
-				TextureExporter.ExportTexture(config,b.Icon, false, logger, outDir);
-			}
 		}
 	}
 }
