@@ -33,7 +33,7 @@ namespace SoulmaskDataMiner.Miners
 	/// <summary>
 	/// Mines map images and information about points of interest
 	/// </summary>
-	[MinerName("Map"), RequireHierarchy(true), RequireLootDatabase(true)]
+	[MinerName("Map"), RequireHierarchy(true), RequireLootDatabase(true), RunOncePerProcess]
 	internal class MapMiner : MinerBase
 	{
 		private static readonly MapData sMapData;

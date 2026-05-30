@@ -111,4 +111,19 @@ namespace SoulmaskDataMiner
 			IsRequired = isRequired;
 		}
 	}
+
+	/// <summary>
+	/// Indicates that a data miner's output does not vary by language and should
+	/// only run once per process. The miner runs in the first language batch and
+	/// is skipped for all subsequent languages.
+	/// </summary>
+	/// <remarks>
+	/// Use this for miners whose output is structural / locale-independent — e.g.
+	/// MapMiner, which emits coordinates and class refs but no localized text.
+	/// Texture export is already gated similarly via <see cref="Config.IsTextureExportActive"/>.
+	/// </remarks>
+	[AttributeUsage(AttributeTargets.Class)]
+	internal class RunOncePerProcessAttribute : Attribute
+	{
+	}
 }

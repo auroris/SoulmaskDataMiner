@@ -12,40 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CUE4Parse.Encryption.Aes;
 using CUE4Parse.FileProvider;
 using CUE4Parse.UE4.Versions;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using SoulmaskDataMiner.GameData;
-using System.Diagnostics;
 
 namespace SoulmaskDataMiner
 {
 	/// <summary>
-	/// Default implementation of IProviderManager
+	/// Per-language view of mining resources. Delegates process-wide state
+	/// (provider, class metadata, loot database) to a <see cref="SharedMiningContext"/>
+	/// and holds only the locale-dependent state itself (text table, singletons,
+	/// achievements). One instance per language batch.
 	/// </summary>
-	internal sealed class ProviderManager : IProviderManager, IDisposable
+	internal sealed class ProviderManager : IProviderManager
 	{
-		private readonly Config mConfig;
-
+		private readonly SharedMiningContext mShared;
 		private readonly ELanguage mLanguage;
 
-		private readonly DefaultFileProvider mProvider;
-
-		private Dictionary<string, MetaClass>? mClassMetadata;
-
 		private GameTextTable? mGameTextTable;
-
 		private GameSingletonManager? mResourceManager;
-
 		private Achievements? mAchievements;
 
-		private LootDatabase? mLootDatabase;
+		public IFileProvider Provider => mShared.Provider;
 
-		public IFileProvider Provider => mProvider;
-
-		public IReadOnlyDictionary<string, MetaClass>? ClassMetadata => mClassMetadata;
+		public IReadOnlyDictionary<string, MetaClass>? ClassMetadata => mShared.ClassMetadata;
 
 		public GameTextTable GameTextTable
 		{
@@ -87,162 +77,34 @@ namespace SoulmaskDataMiner
 		{
 			get
 			{
-				if (mLootDatabase is null)
+				if (mShared.LootDatabase is null)
 				{
-					throw new InvalidOperationException("LootDatabase not found. Has the provider manager been initialized, and has a running miner declared a RequireLootDatabase attribute?");
+					throw new InvalidOperationException("LootDatabase not found. Has a running miner declared a RequireLootDatabase attribute?");
 				}
-				return mLootDatabase;
+				return mShared.LootDatabase;
 			}
 		}
 
-		public ProviderManager(Config config, ELanguage language)
+		public ProviderManager(SharedMiningContext shared, ELanguage language)
 		{
-			mConfig = config;
+			mShared = shared;
 			mLanguage = language;
-			mProvider = new DefaultFileProvider(Path.Combine(config.GameContentDirectory, "Paks"), SearchOption.TopDirectoryOnly, null, null);
 		}
 
+		/// <summary>
+		/// Loads the locale-dependent resources for this language batch. The
+		/// shared provider's culture must already be switched to <see cref="mLanguage"/>
+		/// (the caller is responsible — see <see cref="SharedMiningContext.SwitchCulture"/>).
+		/// </summary>
 		public bool Initialize(Logger logger)
 		{
-			InitializeProvider(mProvider);
-			if (!LoadClassMetaData(logger))
-			{
-				return false;
-			}
-			mGameTextTable = GameTextTable.Load(mProvider, logger);
-			mResourceManager = GameSingletonManager.Load(mProvider, logger);
+			mGameTextTable = GameTextTable.Load(mShared.Provider, logger);
+			mResourceManager = GameSingletonManager.Load(mShared.Provider, logger);
 			if (mResourceManager is not null)
 			{
 				mAchievements = Achievements.Load(mResourceManager, logger);
 			}
-
 			return true;
-		}
-
-		public bool LoadLootDatabase(Logger logger)
-		{
-			mLootDatabase = new();
-			if (!mLootDatabase.Load(mProvider, logger))
-			{
-				mLootDatabase = null;
-				return false;
-			}
-			return true;
-		}
-
-		public void Dispose()
-		{
-			mResourceManager = null;
-			mProvider.Dispose();
-		}
-
-		private void InitializeProvider(DefaultFileProvider provider)
-		{
-			provider.Initialize();
-
-			FAesKey key;
-			if (mConfig.EncryptionKey is null)
-			{
-				key = new(new byte[32]);
-			}
-			else
-			{
-				key = new(mConfig.EncryptionKey);
-			}
-
-			foreach (var vfsReader in provider.UnloadedVfs)
-			{
-				provider.SubmitKey(vfsReader.EncryptionKeyGuid, key);
-			}
-
-			mProvider.PostMount();
-
-			mProvider.ChangeCulture(Config.GetLanguageCode(mLanguage));
-		}
-
-		private bool LoadClassMetaData(Logger logger)
-		{
-			if (mConfig.ClassesPath is null) return true;
-
-			try
-			{
-				logger.Information("Loading class metadata...");
-
-				long startTimestamp = Stopwatch.GetTimestamp();
-
-				JObject root;
-
-				using (FileStream file = File.OpenRead(mConfig.ClassesPath))
-				using (StreamReader sr = new(file))
-				using (JsonReader reader = new JsonTextReader(sr))
-				{
-					root = JObject.Load(reader);
-				}
-
-				JArray classArray = (JArray)root["data"]!;
-
-				Dictionary<string, MetaClass> classes = new();
-
-				HashSet<string> propertiesToIgnore = new()
-				{
-					"__MDKClassSize"
-				};
-				foreach (JObject classObj in classArray)
-				{
-					foreach (JProperty @class in classObj.Properties())
-					{
-						string className = @class.Name.Substring(1); // Trim leading U, A, F, etc.
-						if (classes.ContainsKey(className))
-						{
-							logger.Debug($"Found an additional instance of class \"{className}\" in metadata. Skipping.");
-							continue;
-						}
-
-						string? classSuper = null;
-						List<MetaClassProperty> classProperties = new();
-
-						JArray classPropertyArray = (JArray)@class.Value;
-						foreach (JObject classPropertyObj in classPropertyArray)
-						{
-							foreach (JProperty classProperty in classPropertyObj.Properties())
-							{
-								string propertyName = classProperty.Name;
-								if (propertiesToIgnore.Contains(propertyName)) continue;
-
-								if (propertyName.Equals("__InheritInfo"))
-								{
-									JArray classSuperArray = (JArray)classProperty.Value;
-									if (classSuperArray.Count > 0)
-									{
-										classSuper = ((string)classSuperArray[0]!).Substring(1); // Trim leading U, A, F, etc.
-									}
-									continue;
-								}
-
-								JArray propertyValue = (JArray)classProperty.Value;
-								JArray propertyValue0 = (JArray)propertyValue[0];
-
-								string propertyType = (string)propertyValue0[0]!;
-
-								classProperties.Add(new() { Name = propertyName, Type = propertyType });
-							}
-						}
-
-						classes.Add(className, new() { Name = className, Super = classSuper!, Properties = classProperties });
-					}
-				}
-
-				mClassMetadata = classes;
-
-				logger.Information($"Class metadata loaded in {Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds:0.##}ms");
-
-				return true;
-			}
-			catch (Exception ex)
-			{
-				logger.Error($"Failed to load class metadata. [{ex.GetType().FullName}] {ex.Message}");
-				return false;
-			}
 		}
 	}
 

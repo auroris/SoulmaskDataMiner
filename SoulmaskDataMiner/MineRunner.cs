@@ -13,7 +13,6 @@
 // limitations under the License.
 
 using CUE4Parse.UE4.Versions;
-using SoulmaskDataMiner.GameData;
 using SoulmaskDataMiner.IO;
 using System.Diagnostics;
 using System.Reflection;
@@ -22,33 +21,30 @@ using System.Text;
 namespace SoulmaskDataMiner
 {
 	/// <summary>
-	/// Locates, instantiates and runs data miners
+	/// Runs miners for a single language batch using a pre-built
+	/// <see cref="SharedMiningContext"/>. The hierarchy, class metadata, and
+	/// loot database are loaded once by the caller before any MineRunner is
+	/// constructed; this class only handles the per-language work.
 	/// </summary>
 	internal sealed class MineRunner : IDisposable
 	{
+		private readonly SharedMiningContext mShared;
 		private readonly Config mConfig;
-
 		private readonly ELanguage mLanguage;
-
+		private readonly bool mIsFirstLanguage;
 		private readonly Logger mLogger;
-
 		private readonly ProviderManager mProviderManager;
-
 		private readonly List<IDataMiner> mMiners;
 
-		private bool mRequireHierarchy;
-
-		private bool mRequireLootDatabase;
-
-		public MineRunner(Config config, ELanguage language, Logger logger)
+		public MineRunner(SharedMiningContext shared, Config config, ELanguage language, bool isFirstLanguage, Logger logger)
 		{
+			mShared = shared;
 			mConfig = config;
 			mLanguage = language;
+			mIsFirstLanguage = isFirstLanguage;
 			mLogger = logger;
-			mProviderManager = new ProviderManager(config, language);
+			mProviderManager = new ProviderManager(shared, language);
 			mMiners = new();
-			mRequireHierarchy = false;
-			mRequireLootDatabase = false;
 		}
 
 		public bool Initialize()
@@ -71,22 +67,10 @@ namespace SoulmaskDataMiner
 				}
 			}
 			mMiners.Clear();
-
-			mProviderManager.Dispose();
 		}
 
 		public bool Run()
 		{
-			if (mRequireHierarchy)
-			{
-				GameClassHierarchy.Load(mProviderManager, mLogger);
-			}
-
-			if (mRequireLootDatabase)
-			{
-				mProviderManager.LoadLootDatabase(mLogger);
-			}
-
 			string sqlPath = Path.Combine(mConfig.OutputDirectory, "update.sql");
 			using FileStream sqlFile = IOUtil.CreateFile(sqlPath, mLogger);
 			using StreamWriter sqlStream = new(sqlFile, Encoding.UTF8) { NewLine = "\n" };
@@ -145,10 +129,12 @@ namespace SoulmaskDataMiner
 				}
 			}
 
-			if (mRequireLootDatabase)
+			// Only emit the loot section in the language batch that actually ran the loot-requiring miner.
+			// Loot data is locale-independent, so this is the first-language batch when MapMiner runs.
+			if (mShared.LootDatabase is not null && mIsFirstLanguage)
 			{
 				sqlWriter.WriteStartSection("loot");
-				mProviderManager.LootDatabase.SaveData(sqlWriter, mConfig, mLogger);
+				mShared.LootDatabase.SaveData(sqlWriter, mConfig, mLogger);
 				sqlWriter.WriteEndSection();
 			}
 
@@ -178,13 +164,41 @@ namespace SoulmaskDataMiner
 			additionalMiners.Sort();
 		}
 
+		/// <summary>
+		/// Inspects the configured miner filter and tells the caller which
+		/// process-wide resources the active set of miners will require.
+		/// Used by <see cref="Program"/> to gate hierarchy / loot DB loads.
+		/// </summary>
+		public static (bool NeedHierarchy, bool NeedLootDatabase) DetermineCapabilities(Config config, bool classMetadataLoaded)
+		{
+			HashSet<string>? includeMiners = config.Miners == null ? null : new HashSet<string>(config.Miners.Select(m => m.ToLowerInvariant()));
+			bool forceInclude = includeMiners?.Contains("all") ?? false;
+
+			bool needHierarchy = false;
+			bool needLoot = false;
+
+			foreach (MinerDescriptor desc in GetMinerDescriptors())
+			{
+				if (includeMiners == null && !desc.IsDefault) continue;
+
+				string nameLower = desc.Name.ToLowerInvariant();
+
+				if (desc.RequireClassData && !classMetadataLoaded) continue;
+				if (!forceInclude && !(includeMiners?.Contains(nameLower) ?? true)) continue;
+
+				needHierarchy |= desc.RequireHierarchy;
+				needLoot |= desc.RequireLootDatabase;
+			}
+
+			return (needHierarchy, needLoot);
+		}
+
 		private void CreateMiners(IEnumerable<string>? minersToInclude)
 		{
-			mRequireHierarchy = false;
-			mRequireLootDatabase = false;
-
 			HashSet<string>? includeMiners = minersToInclude == null ? null : new HashSet<string>(minersToInclude.Select(m => m.ToLowerInvariant()));
 			bool forceInclude = includeMiners?.Contains("all") ?? false;
+
+			List<string> skippedRunOnce = new();
 
 			foreach (MinerDescriptor desc in GetMinerDescriptors())
 			{
@@ -207,6 +221,13 @@ namespace SoulmaskDataMiner
 					continue;
 				}
 
+				if (desc.RunOncePerProcess && !mIsFirstLanguage)
+				{
+					skippedRunOnce.Add(desc.Name);
+					includeMiners?.Remove(nameLower);
+					continue;
+				}
+
 				IDataMiner? miner;
 				try
 				{
@@ -225,8 +246,6 @@ namespace SoulmaskDataMiner
 
 				includeMiners?.Remove(nameLower);
 				mMiners.Add(miner);
-				mRequireHierarchy |= desc.RequireHierarchy;
-				mRequireLootDatabase |= desc.RequireLootDatabase;
 			}
 
 			includeMiners?.RemoveWhere(n => n.Equals("all", StringComparison.OrdinalIgnoreCase));
@@ -234,6 +253,10 @@ namespace SoulmaskDataMiner
 			if (includeMiners?.Count > 0)
 			{
 				mLogger.Warning($"The following miners specified in the filter could not be located: {string.Join(',', includeMiners)}");
+			}
+			if (skippedRunOnce.Count > 0)
+			{
+				mLogger.Information($"Skipped [{string.Join(',', skippedRunOnce)}] for this language (already ran in primary language).");
 			}
 			if (mMiners.Count == 0)
 			{
@@ -251,7 +274,8 @@ namespace SoulmaskDataMiner
 			bool IsDefault,
 			bool RequireHierarchy,
 			bool RequireClassData,
-			bool RequireLootDatabase);
+			bool RequireLootDatabase,
+			bool RunOncePerProcess);
 
 		private static IReadOnlyList<MinerDescriptor>? sMinerDescriptors;
 
@@ -274,8 +298,9 @@ namespace SoulmaskDataMiner
 				bool requireHierarchy = type.GetCustomAttribute<RequireHierarchyAttribute>()?.IsRequired ?? false;
 				bool requireClassData = type.GetCustomAttribute<RequireClassDataAttribute>()?.IsRequired ?? false;
 				bool requireLootDatabase = type.GetCustomAttribute<RequireLootDatabaseAttribute>()?.IsRequired ?? false;
+				bool runOncePerProcess = type.GetCustomAttribute<RunOncePerProcessAttribute>() is not null;
 
-				result.Add(new MinerDescriptor(type, name, isDefault, requireHierarchy, requireClassData, requireLootDatabase));
+				result.Add(new MinerDescriptor(type, name, isDefault, requireHierarchy, requireClassData, requireLootDatabase, runOncePerProcess));
 			}
 
 			sMinerDescriptors = result;

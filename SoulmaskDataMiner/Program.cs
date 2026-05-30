@@ -42,6 +42,29 @@ namespace SoulmaskDataMiner
 			ZlibHelper.Initialize(Path.Combine(assemblyDir, ZlibHelper.DLL_NAME));
 			OodleHelper.Initialize(Path.Combine(assemblyDir, OodleHelper.OODLE_NAME_CURRENT));
 
+			// Build the process-wide context once. The provider's package cache,
+			// class metadata, hierarchy, and loot database all persist across language batches.
+			ELanguage primaryLanguage = config.Languages[0];
+			using SharedMiningContext? shared = SharedMiningContext.Build(config, primaryLanguage, logger);
+			if (shared is null)
+			{
+				return OnExit(1);
+			}
+
+			// Inspect which capabilities the active miner set needs and load them once.
+			(bool needHierarchy, bool needLoot) = MineRunner.DetermineCapabilities(config, shared.ClassMetadata is not null);
+			if (needHierarchy)
+			{
+				shared.LoadHierarchy(logger);
+			}
+			if (needLoot)
+			{
+				if (!shared.LoadLootDatabase(logger))
+				{
+					logger.Warning("Loot database failed to load. Miners that require it will be skipped or partially succeed.");
+				}
+			}
+
 			bool success = true;
 			string originalOutputDirectory = config.OutputDirectory;
 
@@ -49,12 +72,9 @@ namespace SoulmaskDataMiner
 			{
 				ELanguage language = config.Languages[langIndex];
 				string langCode = Config.GetLanguageCode(language);
+				bool isFirstLanguage = langIndex == 0;
 
-				if (config.Languages.Count > 1)
-				{
-					logger.Important($"\n--- Mining language: {language} ({langCode}) ---");
-				}
-				else if (language != ELanguage.English)
+				if (config.Languages.Count > 1 || language != ELanguage.English)
 				{
 					logger.Important($"\n--- Mining language: {language} ({langCode}) ---");
 				}
@@ -77,10 +97,17 @@ namespace SoulmaskDataMiner
 				}
 
 				config.OutputDirectory = localizedOutputDirectory;
-				config.IsTextureExportActive = config.ExportTextures && (langIndex == 0);
+				// Textures and other locale-independent outputs (Map) only run for the first language.
+				config.IsTextureExportActive = config.ExportTextures && isFirstLanguage;
+
+				// Switch the shared provider's culture before running this language's miners.
+				if (!isFirstLanguage)
+				{
+					shared.SwitchCulture(langCode);
+				}
 
 				bool langSuccess;
-				using (MineRunner runner = new(config, language, logger))
+				using (MineRunner runner = new(shared, config, language, isFirstLanguage, logger))
 				{
 					if (!runner.Initialize())
 					{

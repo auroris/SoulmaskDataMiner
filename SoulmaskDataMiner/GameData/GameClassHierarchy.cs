@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CUE4Parse.FileProvider;
 using CUE4Parse.UE4.Assets;
 using CUE4Parse.UE4.Assets.Exports;
 using CUE4Parse.UE4.Assets.Exports.Component.StaticMesh;
 using CUE4Parse.UE4.Objects.UObject;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 
 namespace SoulmaskDataMiner.GameData
@@ -28,6 +30,11 @@ namespace SoulmaskDataMiner.GameData
 		private static GameClassHierarchy? sInstance;
 
 		private readonly Dictionary<string, InternalClassInfo> mSuperMap;
+
+		// Memoized results of GetDerivedBlueprintClasses(name). The hierarchy is
+		// immutable after Load, so this cache is safe to share across all miners
+		// and language batches. Saves repeating the recursive hashset walk.
+		private readonly ConcurrentDictionary<string, IReadOnlyList<BlueprintClassInfo>> mDerivedBlueprintCache = new();
 
 		public IReadOnlySet<string> FoliageComponentClasses { get; private set; }
 
@@ -51,9 +58,11 @@ namespace SoulmaskDataMiner.GameData
 		}
 
 		/// <summary>
-		/// Loads the class hierarchy, making it ready for miners to make use of
+		/// Loads the class hierarchy, making it ready for miners to make use of.
+		/// Locale-independent — only needs the file provider and class metadata,
+		/// not a full <see cref="IProviderManager"/>.
 		/// </summary>
-		public static void Load(IProviderManager providerManager, Logger logger)
+		public static void Load(IFileProvider provider, IReadOnlyDictionary<string, MetaClass>? classMetadata, Logger logger)
 		{
 			logger.Information("Loading class hierarchy...");
 
@@ -61,15 +70,15 @@ namespace SoulmaskDataMiner.GameData
 
 			Dictionary<string, InternalClassInfo> superMap = new();
 
-			if (providerManager.ClassMetadata is not null)
+			if (classMetadata is not null)
 			{
-				foreach (var pair in providerManager.ClassMetadata)
+				foreach (var pair in classMetadata)
 				{
 					superMap.Add(pair.Key, new() { SuperName = pair.Value.Super });
 				}
 			}
 
-			var uassetFiles = providerManager.Provider.Files.Values
+			var uassetFiles = provider.Files.Values
 				.Where(f => f.Extension.Equals("uasset", StringComparison.OrdinalIgnoreCase))
 				.ToList();
 
@@ -78,7 +87,7 @@ namespace SoulmaskDataMiner.GameData
 				Package? package;
 				try
 				{
-					package = providerManager.Provider.LoadPackage(file) as Package;
+					package = provider.LoadPackage(file) as Package;
 				}
 				catch
 				{
@@ -164,13 +173,21 @@ namespace SoulmaskDataMiner.GameData
 		/// <summary>
 		/// Returns all blueprint classes derived from the specified class.
 		/// </summary>
-		public IEnumerable<BlueprintClassInfo> GetDerivedBlueprintClasses(string className)
+		/// <remarks>
+		/// Results are memoized — the recursive walk is locale-independent and
+		/// the hierarchy is immutable after <see cref="Load"/>, so repeated calls
+		/// for the same base class return the same cached list.
+		/// </remarks>
+		public IReadOnlyList<BlueprintClassInfo> GetDerivedBlueprintClasses(string className)
 		{
-			if (mSuperMap.TryGetValue(className, out InternalClassInfo classInfo))
+			return mDerivedBlueprintCache.GetOrAdd(className, name =>
 			{
-				return InternalGetDerivedBlueprintClasses(classInfo);
-			}
-			return Enumerable.Empty<BlueprintClassInfo>();
+				if (mSuperMap.TryGetValue(name, out InternalClassInfo classInfo))
+				{
+					return InternalGetDerivedBlueprintClasses(classInfo).ToList();
+				}
+				return Array.Empty<BlueprintClassInfo>();
+			});
 		}
 
 		/// <summary>
