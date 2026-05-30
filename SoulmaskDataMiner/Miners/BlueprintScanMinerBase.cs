@@ -24,10 +24,22 @@ using System.Diagnostics.CodeAnalysis;
 namespace SoulmaskDataMiner.Miners
 {
 	/// <summary>
-	/// Base class for miners that gather information about specific class hierarchies
+	/// Base class for miners that discover data by scanning the blueprint class
+	/// hierarchy: pick one or more base classes by name, walk every derived
+	/// <c>BlueprintGeneratedClass</c>, and read named properties off each
+	/// subclass's Class Default Object (CDO) — inheriting unfound properties
+	/// from the super chain.
 	/// </summary>
+	/// <remarks>
+	/// Derived miners declare what to extract via <see cref="NameProperty"/>
+	/// (required), <see cref="IconProperty"/>, <see cref="DescriptionProperty"/>,
+	/// and <see cref="AdditionalPropertyNames"/>, then call
+	/// <see cref="FindObjects(IEnumerable{string})"/> to get the populated rows.
+	/// The <c>[RequireHierarchy(true)]</c> attribute ensures the class hierarchy
+	/// is loaded before any such miner runs.
+	/// </remarks>
 	[RequireHierarchy(true)]
-	internal abstract class SubclassMinerBase : MinerBase
+	internal abstract class BlueprintScanMinerBase : MinerBase
 	{
 		/// <summary>
 		/// The name of the property that stores the name to associate with the class.

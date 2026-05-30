@@ -318,21 +318,115 @@ namespace SoulmaskDataMiner.Miners
 			}
 		}
 
+		// Row type for the POI table: pairs a MapPoi with its owning map name. The map name is
+		// emitted as the leading SQL column but not in the CSV (the CSV is keyed per (map, icon)).
+		private readonly record struct PoiRow(string MapName, MapPoi Poi);
+
+		private static bool IsSpawner(PoiRow r) => r.Poi.GroupIndex != SpawnLayerGroup.PointOfInterest;
+
+		// Helpers for the "spawner-only" and "PoI-only" conditional columns: the cell renders
+		// the value when the row matches the group, and null/"null" otherwise. Centralizes the
+		// per-cell null fallback that used to live in the "ninth comma" of the old spawner segment.
+		private static TableColumn<PoiRow> SpawnerStr(string name, Func<MapPoi, string?> get) =>
+			new(name,
+				r => IsSpawner(r) ? SerializationUtil.CsvStr(get(r.Poi)) : null,
+				r => IsSpawner(r) ? SerializationUtil.DbStr(get(r.Poi)) : "null");
+
+		private static TableColumn<PoiRow> SpawnerInt(string name, Func<MapPoi, int> get) =>
+			new(name,
+				r => IsSpawner(r) ? get(r.Poi).ToString() : null,
+				r => IsSpawner(r) ? get(r.Poi).ToString() : "null");
+
+		private static TableColumn<PoiRow> SpawnerNullInt(string name, Func<MapPoi, int?> get) =>
+			new(name,
+				r => IsSpawner(r) ? get(r.Poi)?.ToString() : null,
+				r => IsSpawner(r) ? SerializationUtil.DbVal(get(r.Poi)) : "null");
+
+		private static TableColumn<PoiRow> SpawnerBool(string name, Func<MapPoi, bool> get) =>
+			new(name,
+				r => IsSpawner(r) ? get(r.Poi).ToString().ToLowerInvariant() : null,
+				r => IsSpawner(r) ? SerializationUtil.DbBool(get(r.Poi)) : "null");
+
+		private static TableColumn<PoiRow> SpawnerFloat(string name, Func<MapPoi, float> get) =>
+			new(name,
+				r => IsSpawner(r) ? get(r.Poi).ToString() : null,
+				r => IsSpawner(r) ? get(r.Poi).ToString() : "null");
+
+		private static TableColumn<PoiRow> PoiStr(string name, Func<MapPoi, string?> get) =>
+			new(name,
+				r => !IsSpawner(r) ? SerializationUtil.CsvStr(get(r.Poi)) : null,
+				r => !IsSpawner(r) ? SerializationUtil.DbStr(get(r.Poi)) : "null");
+
+		// 44 shared columns used by both per-group CSV files and the unified SQL table.
+		// SQL prepends an extra "map" column (see sPoiSqlColumns) — CSV doesn't need it
+		// because the map name is encoded in the output path.
+		private static readonly IReadOnlyList<TableColumn<PoiRow>> sPoiSharedColumns =
+		[
+			TableColumn.NullInt<PoiRow>("modes", r => r.Poi.GameModeMask),
+			TableColumn.Int<PoiRow>("gpIdx", r => (int)r.Poi.GroupIndex),
+			TableColumn.Str<PoiRow>("gpName", r => MapStringUtil.GetGroupName(r.Poi.GroupIndex)),
+			TableColumn.NullInt<PoiRow>("key", r => r.Poi.Key),
+			TableColumn.Str<PoiRow>("type", r => r.Poi.Type),
+			new TableColumn<PoiRow>("posX",
+				r => r.Poi.Location.HasValue ? r.Poi.Location.Value.X.ToString("0") : null,
+				r => r.Poi.Location.HasValue ? r.Poi.Location.Value.X.ToString("0") : "null"),
+			new TableColumn<PoiRow>("posY",
+				r => r.Poi.Location.HasValue ? r.Poi.Location.Value.Y.ToString("0") : null,
+				r => r.Poi.Location.HasValue ? r.Poi.Location.Value.Y.ToString("0") : "null"),
+			new TableColumn<PoiRow>("posZ",
+				r => r.Poi.Location.HasValue ? r.Poi.Location.Value.Z.ToString("0") : null,
+				r => r.Poi.Location.HasValue ? r.Poi.Location.Value.Z.ToString("0") : "null"),
+			TableColumn.Float<PoiRow>("mapX", r => r.Poi.MapLocation.X, format: "0"),
+			TableColumn.Float<PoiRow>("mapY", r => r.Poi.MapLocation.Y, format: "0"),
+			new TableColumn<PoiRow>("mapR",
+				r => r.Poi.MapRadius == 0.0f ? null : r.Poi.MapRadius.ToString(),
+				r => r.Poi.MapRadius == 0.0f ? "null" : r.Poi.MapRadius.ToString()),
+			TableColumn.Str<PoiRow>("title", r => r.Poi.Title),
+			TableColumn.Str<PoiRow>("name", r => r.Poi.Name),
+			TableColumn.Str<PoiRow>("desc", r => r.Poi.Description),
+			TableColumn.Str<PoiRow>("extra", r => r.Poi.Extra),
+			TableColumn.Str<PoiRow>("region", r => r.Poi.Region),
+			SpawnerNullInt("npc", p => (int?)p.NpcCategory),
+			SpawnerBool("m", p => p.Male),
+			SpawnerBool("f", p => p.Female),
+			SpawnerStr("stat", p => p.TribeStatus),
+			SpawnerStr("occ", p => p.Occupation),
+			SpawnerNullInt("clantype", p => p.ClanType),
+			SpawnerStr("clanarea", p => p.ClanAreas),
+			SpawnerStr("clanocc", p => p.ClanOccupations),
+			SpawnerInt("num", p => p.SpawnCount),
+			SpawnerInt("max", p => p.SpawnCountMax),
+			SpawnerFloat("intr", p => p.SpawnInterval),
+			SpawnerFloat("player", p => p.PlayerExclusionRadius),
+			SpawnerFloat("building", p => p.BuildingExclusionRadius),
+			TableColumn.Str<PoiRow>("loot", r => r.Poi.LootId),
+			TableColumn.Str<PoiRow>("lootitem", r => r.Poi.LootItem),
+			TableColumn.Str<PoiRow>("lootmap", r => r.Poi.LootMap),
+			TableColumn.Str<PoiRow>("equipmap", r => r.Poi.Equipment),
+			TableColumn.Str<PoiRow>("collectmap", r => r.Poi.CollectMap),
+			TableColumn.Str<PoiRow>("unlocks", r => r.Poi.Unlocks),
+			TableColumn.Str<PoiRow>("icon", r => r.Poi.Icon?.Name),
+			PoiStr("ach", p => p.Achievement?.Name),
+			PoiStr("achDesc", p => p.Achievement?.Description),
+			PoiStr("achIcon", p => p.Achievement?.Icon?.Name),
+			TableColumn.Bool<PoiRow>("inDun", r => r.Poi.InDungeon),
+			TableColumn.Str<PoiRow>("dunInfo", r => r.Poi.DungeonInfo),
+			TableColumn.Str<PoiRow>("bossInfo", r => r.Poi.BossInfo),
+			TableColumn.Str<PoiRow>("arenaInfo", r => r.Poi.ArenaInfo),
+			TableColumn.Str<PoiRow>("chestWeather", r => r.Poi.ChestWeatherRule),
+		];
+
+		// SQL adds the leading map column; otherwise identical to the CSV shape.
+		private static readonly IReadOnlyList<TableColumn<PoiRow>> sPoiSqlColumns =
+			new TableColumn<PoiRow>[] { TableColumn.Str<PoiRow>("map", r => r.MapName) }
+				.Concat(sPoiSharedColumns)
+				.ToArray();
+
 		private void WriteCsv(MapInfo mapData, Config config, Logger logger)
 		{
-			string valOrNull(float value)
-			{
-				return value == 0.0f ? "" : value.ToString();
-			}
-
 			foreach (var pair in mapData.POIs)
 			{
-				string outPath = Path.Combine(config.OutputDirectory, Name, mapData.MapName, $"{pair.Key}.csv");
-				using FileStream outFile = IOUtil.CreateFile(outPath, logger);
-				using StreamWriter writer = new(outFile, Encoding.UTF8);
-
-				writer.WriteLine("modes,gpIdx,gpName,key,type,posX,posY,posZ,mapX,mapY,mapR,title,name,desc,extra,region,npc,m,f,stat,occ,clantype,clanarea,clanocc,num,max,intr,player,building,loot,lootitem,lootmap,equipmap,collectmap,unlocks,icon,ach,achDesc,achIcon,inDun,dunInfo,bossInfo,arenaInfo,chestWeather");
-
+				List<PoiRow> rows = new();
 				foreach (MapPoi poi in pair.Value)
 				{
 					if (poi.Location == FVector.ZeroVector)
@@ -340,32 +434,9 @@ namespace SoulmaskDataMiner.Miners
 						logger.Debug($"POI with missing location: {poi.Title} ({poi.Type})");
 						continue;
 					}
-
-					string spawnerSegment = ",,,,,,,,";
-					string poiSegment = ",,";
-					if (poi.GroupIndex == SpawnLayerGroup.PointOfInterest)
-					{
-						poiSegment = $"{CsvStr(poi.Achievement?.Name)},{CsvStr(poi.Achievement?.Description)},{CsvStr(poi.Achievement?.Icon?.Name)}";
-					}
-					else
-					{
-						spawnerSegment = $"{(int?)poi.NpcCategory},{poi.Male},{poi.Female},{CsvStr(poi.TribeStatus)},{CsvStr(poi.Occupation)},{poi.ClanType},{CsvStr(poi.ClanAreas)},{poi.ClanOccupations},{poi.SpawnCount},{poi.SpawnCountMax},{poi.SpawnInterval},{poi.PlayerExclusionRadius},{poi.BuildingExclusionRadius}";
-					}
-
-					string lootSegment = $"{CsvStr(poi.LootId)},{CsvStr(poi.LootItem)},{CsvStr(poi.LootMap)},{CsvStr(poi.Equipment)},{CsvStr(poi.CollectMap)}";
-
-					string posSegment = ",,";
-					if (poi.Location.HasValue)
-					{
-						posSegment = $"{poi.Location.Value.X:0},{poi.Location.Value.Y:0},{poi.Location.Value.Z:0}";
-					}
-
-					string gameMode = poi.GameModeMask.HasValue ? (poi.GameModeMask.Value).ToString() : string.Empty;
-
-					writer.WriteLine(
-						$"{gameMode},{(int)poi.GroupIndex},{CsvStr(MapStringUtil.GetGroupName(poi.GroupIndex))},{poi.Key},{CsvStr(poi.Type)},{posSegment},{poi.MapLocation.X:0},{poi.MapLocation.Y:0},{valOrNull(poi.MapRadius)},{CsvStr(poi.Title)},{CsvStr(poi.Name)},{CsvStr(poi.Description)},{CsvStr(poi.Extra)}," +
-						$"{CsvStr(poi.Region)},{spawnerSegment},{lootSegment},{CsvStr(poi.Unlocks)},{CsvStr(poi.Icon?.Name)},{poiSegment},{poi.InDungeon},{CsvStr(poi.DungeonInfo)},{CsvStr(poi.BossInfo)},{CsvStr(poi.ArenaInfo)},{CsvStr(poi.ChestWeatherRule)}");
+					rows.Add(new PoiRow(mapData.MapName, poi));
 				}
+				WriteCsvTable(rows, sPoiSharedColumns, config, logger, Path.Combine(mapData.MapName, $"{pair.Key}.csv"));
 			}
 		}
 
@@ -384,8 +455,7 @@ namespace SoulmaskDataMiner.Miners
 			//   `posZ` float,
 			//   `mapX` int not null,
 			//   `mapY` int not null,
-			//   `mapX2` int,
-			//   `mapY2` int,
+			//   `mapR` float,
 			//   `title` varchar(127),
 			//   `name` varchar(127),
 			//   `desc` varchar(511),
@@ -397,8 +467,8 @@ namespace SoulmaskDataMiner.Miners
 			//   `stat` varchar(63),
 			//   `occ` varchar(127),
 			//   `clantype` int,
-			//   `clanareas` varchar[31],
-			//   `clanocc` varchar[31],
+			//   `clanarea` varchar(31),
+			//   `clanocc` varchar(31),
 			//   `num` int,
 			//   `max` int,
 			//   `intr` float,
@@ -421,49 +491,13 @@ namespace SoulmaskDataMiner.Miners
 			//   `chestWeather` varchar(255)
 			// )
 
-			string valOrNull(float value)
-			{
-				return value == 0.0f ? "null" : value.ToString();
-			}
+			// Filter ancient-tablet "no world location" entries: they live in dungeons/pyramids
+			// rather than on the world map and shouldn't land in the poi table.
+			IEnumerable<PoiRow> rows = allMapData
+				.SelectMany(m => m.POIs.SelectMany(p => p.Value.Select(poi => new PoiRow(m.MapName, poi))))
+				.Where(r => r.Poi.Location != FVector.ZeroVector);
 
-			sqlWriter.WriteStartTable("poi");
-
-			foreach (MapInfo mapData in allMapData)
-			{
-				foreach (var pair in mapData.POIs)
-				{
-					foreach (MapPoi poi in pair.Value)
-					{
-						// This is because some ancient tablets come from dungeons or pyramids instead of spawning in the world.
-						if (poi.Location == FVector.ZeroVector) continue;
-
-						string spawnerSegment = "null, null, null, null, null, null, null, null, null, null, null, null, null";
-						string poiSegment = "null, null, null";
-						if (poi.GroupIndex == SpawnLayerGroup.PointOfInterest)
-						{
-							poiSegment = $"{DbStr(poi.Achievement?.Name)}, {DbStr(poi.Achievement?.Description)}, {DbStr(poi.Achievement?.Icon?.Name)}";
-						}
-						else
-						{
-							spawnerSegment = $"{DbVal((int?)poi.NpcCategory)}, {DbBool(poi.Male)}, {DbBool(poi.Female)}, {DbStr(poi.TribeStatus)}, {DbStr(poi.Occupation)}, {DbVal(poi.ClanType)}, {DbStr(poi.ClanAreas)}, {DbStr(poi.ClanOccupations)}, {poi.SpawnCount}, {poi.SpawnCountMax}, {poi.SpawnInterval}, {poi.PlayerExclusionRadius}, {poi.BuildingExclusionRadius}";
-						}
-
-						string lootSegment = $"{DbStr(poi.LootId)}, {DbStr(poi.LootItem)}, {DbStr(poi.LootMap)}, {DbStr(poi.Equipment)}, {DbStr(poi.CollectMap)}";
-
-						string posSegment = "null, null, null";
-						if (poi.Location.HasValue)
-						{
-							posSegment = $"{poi.Location.Value.X:0}, {poi.Location.Value.Y:0}, {poi.Location.Value.Z:0}";
-						}
-
-						sqlWriter.WriteRow(
-							$"{DbStr(mapData.MapName)}, {DbVal(poi.GameModeMask)}, {(int)poi.GroupIndex}, {DbStr(MapStringUtil.GetGroupName(poi.GroupIndex))}, {DbVal(poi.Key)}, {DbStr(poi.Type)}, {posSegment}, {poi.MapLocation.X:0}, {poi.MapLocation.Y:0}, {valOrNull(poi.MapRadius)}, {DbStr(poi.Title)}, {DbStr(poi.Name)}, {DbStr(poi.Description)}, {DbStr(poi.Extra)}, " +
-							$"{DbStr(poi.Region)}, {spawnerSegment}, {lootSegment}, {DbStr(poi.Unlocks)}, {DbStr(poi.Icon?.Name)}, {poiSegment}, {DbBool(poi.InDungeon)}, {DbStr(poi.DungeonInfo)}, {DbStr(poi.BossInfo)}, {DbStr(poi.ArenaInfo)}, {DbStr(poi.ChestWeatherRule)}");
-					}
-				}
-			}
-
-			sqlWriter.WriteEndTable();
+			WriteSqlTable(rows, sPoiSqlColumns, "poi", sqlWriter);
 		}
 
 		private static readonly MinerTable<NpcData> sBabiesTable = new(

@@ -130,6 +130,9 @@ namespace SoulmaskDataMiner.GameData
 						}
 					}
 
+					// Only record the first BlueprintGeneratedClass export per package — by UE convention
+					// the primary blueprint class is the first export, and trailing exports are sub-objects
+					// (default sub-components, anim graphs, etc.), not separate blueprint classes.
 					break;
 				}
 			});

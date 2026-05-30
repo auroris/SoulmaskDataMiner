@@ -21,7 +21,7 @@ namespace SoulmaskDataMiner.Miners
 	/// class-name to display-name lookup for downstream tooling.
 	/// </summary>
 	[MinerName("Building"), RequiredBaseClasses("HJianZhuBase")]
-	internal class BuildingMiner : SubclassMinerBase
+	internal class BuildingMiner : BlueprintScanMinerBase
 	{
 		protected override string NameProperty => "JianZhuDisplayName";
 

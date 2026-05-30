@@ -28,7 +28,7 @@ namespace SoulmaskDataMiner.Miners
 	/// Gathers information about NPC classes
 	/// </summary>
 	[MinerName("Npc"), RequiredBaseClasses("HCharacterRen", "HCharacterDongWu")]
-	internal class NpcMiner : SubclassMinerBase
+	internal class NpcMiner : BlueprintScanMinerBase
 	{
 		protected override string NameProperty => "MoRenMingZi";
 

@@ -26,7 +26,7 @@ using System.Text;
 namespace SoulmaskDataMiner.Miners
 {
 	[MinerName("Recipe"), RequiredBaseClasses("HPeiFangBase")]
-	internal class RecipeMiner : SubclassMinerBase
+	internal class RecipeMiner : BlueprintScanMinerBase
 	{
 		protected override string NameProperty => "PeiFangName";
 
